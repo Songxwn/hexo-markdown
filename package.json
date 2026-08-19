@@ -1,9 +1,9 @@
 {
   "name": "hexo-markdown",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
-  "main": "dist-electron/main.cjs",
+  "main": "dist-electron/main.js",
   "description": "跨平台 Hexo Markdown 编辑器：实时预览，粘贴图片自动上传 Cloudflare R2",
   "author": "Hexo Markdown",
   "repository": {
@@ -33,6 +33,10 @@
       "dist-electron/**/*"
     ],
     "asar": true,
+    "extraMetadata": {
+      "main": "dist-electron/main.js",
+      "type": "module"
+    },
     "asarUnpack": [
       "**/*.node",
       "node_modules/ssh2/**"
