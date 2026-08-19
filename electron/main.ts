@@ -23,6 +23,7 @@ import {
   publicConfig,
   putPost,
   removePost,
+  renamePost,
   updateSettings,
   uploadImage,
 } from "../server/service";
@@ -107,6 +108,7 @@ function createMenu(): void {
       submenu: [
         { label: "新建文章", accelerator: "CmdOrCtrl+N", click: () => sendMenu("new") },
         { label: "保存", accelerator: "CmdOrCtrl+S", click: () => sendMenu("save") },
+        { label: "重命名文件…", click: () => sendMenu("rename") },
         ...fileExtra,
       ],
     },
@@ -180,6 +182,10 @@ function registerIpc(): void {
   handle("posts:delete", (path) => {
     removePost(String(path || ""));
     return { ok: true };
+  });
+  handle("posts:rename", (payload) => {
+    const data = payload as { path?: string; name?: string };
+    return renamePost(data?.path || "", data?.name || "");
   });
   handle("images:upload", async (payload) => {
     const data = payload as {

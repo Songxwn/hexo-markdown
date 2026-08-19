@@ -20,6 +20,7 @@ type HexoDesktopAPI = {
   savePost: (path: string, content: string) => Promise<{ path: string }>;
   createPost: (title: string, folder: PostFolder) => Promise<{ path: string; content: string }>;
   deletePost: (path: string) => Promise<void>;
+  renamePost: (path: string, name: string) => Promise<{ path: string }>;
   uploadImage: (payload: {
     name: string;
     type: string;

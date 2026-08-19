@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 export type MenuAction =
   | "new"
   | "save"
+  | "rename"
   | "settings"
   | "ssh-connect"
   | "ssh-disconnect"
@@ -23,6 +24,7 @@ const api = {
   createPost: (title: string, folder: "posts" | "drafts") =>
     ipcRenderer.invoke("posts:create", { title, folder }),
   deletePost: (path: string) => ipcRenderer.invoke("posts:delete", path),
+  renamePost: (path: string, name: string) => ipcRenderer.invoke("posts:rename", { path, name }),
   uploadImage: (payload: { name: string; type: string; data: ArrayBuffer; postPath: string | null }) =>
     ipcRenderer.invoke("images:upload", payload),
   pickDirectory: () => ipcRenderer.invoke("dialog:directory") as Promise<string | null>,

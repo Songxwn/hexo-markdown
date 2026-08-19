@@ -259,7 +259,7 @@ body.platform-linux .titlebar {
 .post-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 16px 1fr 22px;
+  grid-template-columns: 16px 1fr auto;
   gap: 8px;
   align-items: start;
   text-align: left;
@@ -303,19 +303,32 @@ body.platform-linux .titlebar {
   white-space: nowrap;
 }
 
-.post-del {
+.post-actions {
+  display: flex;
+  align-items: center;
   opacity: 0;
+}
+
+.post-act {
   color: var(--muted);
   display: grid;
   place-items: center;
+  width: 22px;
   height: 22px;
+  border-radius: 6px;
 }
 
-.post-item:hover .post-del {
+.post-item:hover .post-actions,
+.post-item.active .post-actions {
   opacity: 1;
 }
 
-.post-del:hover {
+.post-act:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.post-act.danger:hover {
   color: var(--danger);
 }
 
@@ -587,6 +600,23 @@ body.platform-linux .titlebar {
   padding: 0;
 }
 
+.status-link:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.status-link.path-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.status-link.path-link:hover:not(:disabled) {
+  color: var(--text);
+}
+
 .remote-bar {
   display: flex;
   align-items: center;
@@ -743,6 +773,18 @@ body.platform-linux .titlebar {
   margin: 4px 0 16px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.rename-preview {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.rename-preview code {
+  color: var(--text);
+  font-family: var(--mono);
 }
 
 .modal label {

@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import matter from "gray-matter";
 import type { PostFolder, PostSummary } from "./types";
@@ -107,6 +116,78 @@ export function writePost(hexoRoot: string, relPath: string, content: string): {
 export function deletePost(hexoRoot: string, relPath: string): void {
   const abs = resolveRel(hexoRoot, relPath);
   if (existsSync(abs)) unlinkSync(abs);
+}
+
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+export function sanitizePostFilename(input: string): string {
+  let name = input.trim().replace(/\\/g, "/").split("/").pop() || "";
+  name = name.replace(/\.md$/i, "");
+  name = name
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/\.+$/g, "")
+    .replace(/^-|-$/g, "");
+  if (!name || name === "." || name === "..") {
+    throw new Error("文件名不能为空");
+  }
+  if (WINDOWS_RESERVED.test(name)) {
+    throw new Error("非法文件名");
+  }
+  if (name.length > 120) {
+    throw new Error("文件名过长");
+  }
+  return `${name}.md`;
+}
+
+function movePath(fromAbs: string, toAbs: string): void {
+  if (fromAbs === toAbs) return;
+  if (process.platform === "win32" && fromAbs.toLowerCase() === toAbs.toLowerCase()) {
+    const temp = `${toAbs}.${process.pid}.${Date.now()}.renametmp`;
+    renameSync(fromAbs, temp);
+    renameSync(temp, toAbs);
+    return;
+  }
+  renameSync(fromAbs, toAbs);
+}
+
+export function renamePost(hexoRoot: string, relPath: string, nextName: string): { path: string } {
+  const fromRel = relPath.replace(/\\/g, "/");
+  if (!fromRel.toLowerCase().endsWith(".md")) {
+    throw new Error("只能重命名 Markdown 文件");
+  }
+  const fromAbs = resolveRel(hexoRoot, fromRel);
+  if (!existsSync(fromAbs) || !statSync(fromAbs).isFile()) {
+    throw new Error("文章不存在");
+  }
+
+  const filename = sanitizePostFilename(nextName);
+  const dirRel = fromRel.split("/").slice(0, -1).join("/");
+  const toRel = dirRel ? `${dirRel}/${filename}` : filename;
+  const toAbs = resolveRel(hexoRoot, toRel);
+
+  if (fromAbs === toAbs) {
+    return { path: fromRel };
+  }
+
+  const caseOnly = process.platform === "win32" && fromAbs.toLowerCase() === toAbs.toLowerCase();
+  if (!caseOnly && existsSync(toAbs)) {
+    throw new Error("同名文章已存在");
+  }
+
+  const fromAsset = fromAbs.replace(/\.md$/i, "");
+  const toAsset = toAbs.replace(/\.md$/i, "");
+  const hasAsset = existsSync(fromAsset) && statSync(fromAsset).isDirectory();
+  if (hasAsset && !caseOnly && existsSync(toAsset)) {
+    throw new Error("目标资源目录已存在");
+  }
+
+  movePath(fromAbs, toAbs);
+  if (hasAsset) {
+    movePath(fromAsset, toAsset);
+  }
+  return { path: toRel };
 }
 
 function slugify(title: string): string {

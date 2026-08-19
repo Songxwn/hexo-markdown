@@ -10,13 +10,32 @@ type Props = {
   ssh: SshStatus;
   uploadHint: string | null;
   onToggleLog: () => void;
+  onRename: () => void;
 };
 
-export function StatusBar({ path, words, chars, dirty, r2Configured, ssh, uploadHint, onToggleLog }: Props) {
+export function StatusBar({
+  path,
+  words,
+  chars,
+  dirty,
+  r2Configured,
+  ssh,
+  uploadHint,
+  onToggleLog,
+  onRename,
+}: Props) {
   return (
     <footer className="statusbar">
       <span className={dirty ? "warn" : "ok"}>{dirty ? "未保存" : "已保存"}</span>
-      <span className="dim">{path || "未打开文章"}</span>
+      <button
+        type="button"
+        className="status-link path-link"
+        disabled={!path}
+        onClick={onRename}
+        title={path ? "修改文件名（文章链接）" : "未打开文章"}
+      >
+        {path || "未打开文章"}
+      </button>
       <span className="spacer" />
       {uploadHint && <span className="hint">{uploadHint}</span>}
       <span>

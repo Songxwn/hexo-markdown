@@ -5,6 +5,7 @@ import {
   deletePost,
   listPosts,
   readPost,
+  renamePost as renamePostFile,
   resolveMedia,
   saveLocalAsset,
   validateHexoRoot,
@@ -136,6 +137,11 @@ export function newPost(title: string, folder: PostFolder) {
 export function removePost(rel: string) {
   if (!rel) throw new Error("缺少 path");
   deletePost(requireHexo().hexoRoot, rel);
+}
+
+export function renamePost(rel: string, nextName: string) {
+  if (!rel) throw new Error("缺少 path");
+  return renamePostFile(requireHexo().hexoRoot, rel, nextName);
 }
 
 export function mediaAbsolutePath(rel: string) {

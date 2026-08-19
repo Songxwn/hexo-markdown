@@ -17,6 +17,7 @@ import { NewPostModal } from "./components/NewPostModal";
 import { Preview } from "./components/Preview";
 import { RemoteBar } from "./components/RemoteBar";
 import { RemoteLog } from "./components/RemoteLog";
+import { RenamePostModal } from "./components/RenamePostModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
@@ -36,6 +37,7 @@ export default function App() {
   const [split, setSplit] = useState(52);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingPost, setSavingPost] = useState(false);
   const [uploadHint, setUploadHint] = useState<string | null>(null);
@@ -177,6 +179,35 @@ export default function App() {
     [notify, path, refreshPosts],
   );
 
+  const openRename = useCallback(
+    (postPath: string, name?: string) => {
+      setRenameTarget({
+        path: postPath,
+        name: name || postPath.split("/").pop() || "",
+      });
+    },
+    [],
+  );
+
+  const renamePost = useCallback(
+    async (fromPath: string, nextName: string) => {
+      try {
+        const result = await api.renamePost(fromPath, nextName);
+        if (path === fromPath) {
+          setPath(result.path);
+        }
+        setRenameTarget(null);
+        const filename = result.path.split("/").pop() || result.path;
+        notify("ok", `已重命名为 ${filename}`);
+        await refreshPosts();
+      } catch (error) {
+        notify("err", error instanceof Error ? error.message : "重命名失败");
+        throw error;
+      }
+    },
+    [notify, path, refreshPosts],
+  );
+
   const saveSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
       setSavingSettings(true);
@@ -261,6 +292,13 @@ export default function App() {
       return api.onMenu((action) => {
         if (action === "save") void savePost();
         if (action === "new") setNewOpen(true);
+        if (action === "rename") {
+          if (!path) {
+            notify("err", "请先打开一篇文章");
+            return;
+          }
+          openRename(path);
+        }
         if (action === "settings") setSettingsOpen(true);
         if (action === "ssh-connect") void runRemote("已连接 SSH", () => api.sshConnect());
         if (action === "ssh-disconnect") void runRemote("已断开 SSH", () => api.sshDisconnect());
@@ -280,7 +318,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [notify, path, runRemote, savePost]);
+  }, [notify, openRename, path, runRemote, savePost]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -340,7 +378,13 @@ export default function App() {
       </header>
 
       <div className="body">
-        <Sidebar posts={posts} activePath={path} onOpen={(p) => void openPost(p)} onDelete={(p) => void deletePost(p)} />
+        <Sidebar
+          posts={posts}
+          activePath={path}
+          onOpen={(p) => void openPost(p)}
+          onRename={(p) => openRename(p.path, p.name)}
+          onDelete={(p) => void deletePost(p)}
+        />
 
         <section className="workspace">
           <div className="toolbar">
@@ -431,6 +475,13 @@ export default function App() {
         ssh={ssh}
         uploadHint={uploadHint}
         onToggleLog={() => setLogOpen((open) => !open)}
+        onRename={() => {
+          if (!path) {
+            notify("err", "请先打开一篇文章");
+            return;
+          }
+          openRename(path);
+        }}
       />
 
       <SettingsModal
@@ -441,6 +492,11 @@ export default function App() {
         onSave={saveSettings}
       />
       <NewPostModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createPost} />
+      <RenamePostModal
+        target={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onRename={renamePost}
+      />
 
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}
     </div>

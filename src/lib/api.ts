@@ -45,6 +45,10 @@ export const api = {
     return desktop().deletePost(path);
   },
 
+  renamePost(path: string, name: string): Promise<{ path: string }> {
+    return desktop().renamePost(path, name);
+  },
+
   async uploadImage(file: File, postPath: string | null): Promise<UploadResult> {
     const data = await file.arrayBuffer();
     return desktop().uploadImage({

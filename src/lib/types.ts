@@ -61,6 +61,7 @@ export type SyncResult = {
 export type MenuAction =
   | "new"
   | "save"
+  | "rename"
   | "settings"
   | "ssh-connect"
   | "ssh-disconnect"
