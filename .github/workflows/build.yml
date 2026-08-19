@@ -32,7 +32,6 @@ jobs:
             os: ubuntu-latest
             args: --linux AppImage
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - name: Checkout
@@ -54,7 +53,7 @@ jobs:
         run: npm install
 
       - name: Build
-        run: npx vite build && npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: npx vite build && npx electron-builder ${{ matrix.args }} --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
@@ -67,5 +66,55 @@ jobs:
             release/*.zip
             release/*.yml
             release/*.blockmap
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find dist-artifacts -type f \( \
+            -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o \
+            -name '*.zip' -o -name '*.yml' -o -name '*.yaml' -o -name '*.blockmap' \
+          \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No installers to publish"
+            exit 1
+          fi
+          printf 'Publishing:\n'
+          printf '  %s\n' "${files[@]}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            title="Hexo Markdown ${tag}"
+            notes="安装包由 GitHub Actions 自动构建（${GITHUB_SHA::7}）。"
+            if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              gh release upload "${tag}" "${files[@]}" --clobber --repo "${GITHUB_REPOSITORY}"
+              gh release edit "${tag}" --title "${title}" --notes "${notes}" --latest --repo "${GITHUB_REPOSITORY}"
+            else
+              gh release create "${tag}" "${files[@]}" --title "${title}" --notes "${notes}" --latest --repo "${GITHUB_REPOSITORY}"
+            fi
+          else
+            tag="latest"
+            title="Latest build"
+            notes="自动构建自 \`${GITHUB_SHA::7}\`（${GITHUB_REF_NAME}）。推送 v* 标签会生成正式版本。"
+            if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              gh release upload "${tag}" "${files[@]}" --clobber --repo "${GITHUB_REPOSITORY}"
+              gh release edit "${tag}" --prerelease --title "${title}" --notes "${notes}" --repo "${GITHUB_REPOSITORY}"
+            else
+              gh release create "${tag}" "${files[@]}" --prerelease --title "${title}" --notes "${notes}" --latest=false --repo "${GITHUB_REPOSITORY}"
+            fi
+          fi

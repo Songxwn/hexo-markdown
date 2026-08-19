@@ -84,15 +84,10 @@ npm run dist:linux
 
 ## GitHub 自动编译
 
-推送到 `main` 或提交 Pull Request 后，[Build](.github/workflows/build.yml) 会在 Windows / macOS / Linux 上分别打包：
+推送到 `main` 或提交 Pull Request 后，[Build](.github/workflows/build.yml) 会在 Windows / macOS / Linux 上分别打包。三个平台都成功后，安装包会上传到 [Releases](https://github.com/Songxwn/hexo-markdown/releases)：
 
-- Windows: NSIS 安装包
-- macOS: DMG（未签名）
-- Linux: AppImage
-
-产物出现在仓库 **Actions** 对应运行的 Artifacts 里。
-
-发布安装包到 GitHub Releases：
+- 推送 `main`：更新预发布 **Latest build**
+- 推送 `v*` 标签：发布正式版本
 
 ```bash
 git tag v1.0.1
