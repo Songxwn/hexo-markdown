@@ -24,10 +24,13 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
+            args: --win nsis
           - name: macOS
             os: macos-latest
+            args: --mac dmg zip
           - name: Linux
             os: ubuntu-latest
+            args: --linux AppImage
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -44,13 +47,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm
+          sudo apt-get install -y rpm libfuse2
 
       - name: Install dependencies
         run: npm install
 
       - name: Build
-        run: npx vite build && npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: npx vite build && npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

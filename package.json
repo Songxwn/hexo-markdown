@@ -8,12 +8,8 @@
   "author": "Hexo Markdown",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Songxwn/hexo-markdown.git"
+    "url": "https://github.com/Songxwn/hexo-markdown.git"
   },
-  "bugs": {
-    "url": "https://github.com/Songxwn/hexo-markdown/issues"
-  },
-  "homepage": "https://github.com/Songxwn/hexo-markdown#readme",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -40,11 +36,6 @@
     "asarUnpack": [
       "node_modules/ssh2/**"
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "Songxwn",
-      "repo": "hexo-markdown"
-    },
     "win": {
       "target": [
         {
@@ -66,6 +57,12 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Songxwn",
+      "repo": "hexo-markdown",
+      "releaseType": "release"
     }
   },
   "dependencies": {

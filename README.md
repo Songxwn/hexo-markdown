@@ -2,7 +2,7 @@
 
 跨平台 Electron 桌面应用，用于编写 Hexo 博客：左侧编辑、右侧实时预览；粘贴或拖入图片会自动上传到 **Cloudflare R2**，并插入公开 URL。
 
-支持 **Windows / macOS / Linux**。[![Build](https://github.com/Songxwn/hexo-markdown/actions/workflows/build.yml/badge.svg)](https://github.com/Songxwn/hexo-markdown/actions/workflows/build.yml)
+支持 **Windows / macOS / Linux**。
 
 ## 功能
 
@@ -80,13 +80,23 @@ npm run dist:linux
 - macOS: DMG
 - Linux: AppImage
 
-跨平台打包通常要在对应系统上执行（例如在 macOS 上打 dmg）。Linux / Windows 可用 CI 或对应机器构建。
+跨平台打包通常要在对应系统上执行（例如在 macOS 上打 dmg）。GitHub Actions 会在每次推送 `main` 时自动编译三个平台，打 `v*` 标签时还会发布 Release。
 
-推送到 `main` 或手动触发 **Actions → Build** 后，GitHub 会分别在 Windows / macOS / Linux 上编译，安装包出现在该次运行的 Artifacts 里。打上 `v1.0.0` 这类标签会额外生成 GitHub Release：
+## GitHub 自动编译
+
+推送到 `main` 或提交 Pull Request 后，[Build](.github/workflows/build.yml) 会在 Windows / macOS / Linux 上分别打包：
+
+- Windows: NSIS 安装包
+- macOS: DMG（未签名）
+- Linux: AppImage
+
+产物出现在仓库 **Actions** 对应运行的 Artifacts 里。
+
+发布安装包到 GitHub Releases：
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 ## 使用提示
