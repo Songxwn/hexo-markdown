@@ -22,6 +22,169 @@ export function stripFrontMatter(raw: string): string {
   return raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
 }
 
+export type MdHeading = {
+  id: string;
+  level: 1 | 2 | 3 | 4 | 5 | 6;
+  text: string;
+  line: number;
+  from: number;
+};
+
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/<\/?[^>]+>/g, "")
+    .replace(/[*_~]+/g, "")
+    .trim();
+}
+
+export function slugifyHeading(text: string): string {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[^\p{L}\p{N}\p{M}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || "heading";
+}
+
+function parseHeadingText(raw: string): { text: string; idHint?: string } {
+  let text = raw.trim();
+  const custom = text.match(/^(.*?)\s*\{#([A-Za-z][\w:-]*)\}\s*$/);
+  let idHint: string | undefined;
+  if (custom) {
+    text = custom[1].trim();
+    idHint = custom[2];
+  }
+  return { text: stripInlineMarkdown(text) || "未命名标题", idHint };
+}
+
+function unwrapQuote(line: string): string {
+  return line.replace(/^( {0,3}>[ \t]?)+/, "");
+}
+
+function parseAtx(line: string): { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; idHint?: string } | null {
+  const match = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|[ \t]*$)(.*)$/);
+  if (!match) return null;
+  const level = match[1].length as 1 | 2 | 3 | 4 | 5 | 6;
+  const body = match[2].replace(/[ \t]+#*[ \t]*$/, "");
+  return { level, ...parseHeadingText(body) };
+}
+
+export function extractHeadings(raw: string): MdHeading[] {
+  const lines = raw.split("\n");
+  const found: { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; idHint?: string; line: number; from: number }[] = [];
+  let from = 0;
+  let fence: { ch: string; len: number } | null = null;
+  let hexoCode = false;
+  let hexoRaw = false;
+  let skipNext = false;
+  let inFrontMatter = /^---\s*$/.test((lines[0] || "").replace(/\r$/, ""));
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.replace(/\r$/, "");
+    const lineFrom = from;
+    from += rawLine.length + (i < lines.length - 1 ? 1 : 0);
+
+    if (inFrontMatter) {
+      if (i > 0 && /^---\s*$/.test(line)) inFrontMatter = false;
+      continue;
+    }
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fenceMatch && !hexoCode && !hexoRaw) {
+      const marker = fenceMatch[1];
+      if (!fence) {
+        fence = { ch: marker[0], len: marker.length };
+        continue;
+      }
+      if (marker[0] === fence.ch && marker.length >= fence.len && !fenceMatch[2].trim()) {
+        fence = null;
+      }
+      continue;
+    }
+    if (fence) continue;
+
+    if (/^\{%\s*codeblock\b/.test(line)) {
+      hexoCode = true;
+      continue;
+    }
+    if (hexoCode) {
+      if (/^\{%\s*endcodeblock\s*%\}/.test(line)) hexoCode = false;
+      continue;
+    }
+    if (/^\{%\s*raw\s*%\}/.test(line)) {
+      hexoRaw = true;
+      continue;
+    }
+    if (hexoRaw) {
+      if (/^\{%\s*endraw\s*%\}/.test(line)) hexoRaw = false;
+      continue;
+    }
+
+    if (/^ {4,}|\t/.test(line) && !/^ {0,3}>/.test(line)) continue;
+
+    const visible = unwrapQuote(line);
+    if (/^ {4,}|\t/.test(visible)) continue;
+
+    const atx = parseAtx(visible);
+    if (atx) {
+      found.push({ ...atx, line: i, from: lineFrom });
+      continue;
+    }
+
+    const next = unwrapQuote(lines[i + 1]?.replace(/\r$/, "") ?? "");
+    const setext = next.match(/^ {0,3}(=+|-+)[ \t]*$/);
+    if (setext && visible.trim() && !/^ {4,}|\t/.test(visible)) {
+      found.push({
+        level: setext[1].startsWith("=") ? 1 : 2,
+        ...parseHeadingText(visible),
+        line: i,
+        from: lineFrom,
+      });
+      skipNext = true;
+    }
+  }
+
+  const seen = new Map<string, number>();
+  return found.map((item) => {
+    const base = item.idHint || slugifyHeading(item.text);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return {
+      id: count === 0 ? base : `${base}-${count}`,
+      level: item.level,
+      text: item.text,
+      line: item.line,
+      from: item.from,
+    };
+  });
+}
+
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function applyHeadingIds(html: string, headings: MdHeading[]): string {
+  let index = 0;
+  return html.replace(/<h([1-6])([^>]*)>/gi, (full, level: string, attrs: string) => {
+    if (/\sid\s*=/i.test(full)) return full;
+    const heading = headings[index];
+    index += 1;
+    if (!heading) return full;
+    return `<h${level}${attrs} id="${escapeAttr(heading.id)}">`;
+  });
+}
+
 export function parseTitle(raw: string): string {
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) return "";
@@ -75,10 +238,11 @@ export function renderMarkdown(
   postPath: string | null,
   origin: "local" | "remote" = "local",
 ): string {
+  const headings = extractHeadings(raw);
   const body = preprocessHexo(stripFrontMatter(raw));
-  const html = marked.parse(body, { async: false }) as string;
+  const html = applyHeadingIds(marked.parse(body, { async: false }) as string, headings);
   return DOMPurify.sanitize(rewriteLocalImages(html, postPath, origin), {
-    ADD_ATTR: ["target"],
+    ADD_ATTR: ["target", "id"],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|hexomd|data|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
   });

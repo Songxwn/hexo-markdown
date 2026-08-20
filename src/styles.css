@@ -536,6 +536,21 @@ body.platform-linux .titlebar {
   color: var(--text);
 }
 
+.toolbar button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.toolbar button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 .toolbar-sep {
   width: 1px;
   height: 16px;
@@ -580,11 +595,23 @@ body.platform-linux .titlebar {
   background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 }
 
+.preview-stage {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.preview-stage .preview-pane {
+  flex: 1;
+}
+
 .preview-pane {
   overflow: auto;
   background:
     linear-gradient(180deg, var(--bg-preview-wash), transparent 140px),
     var(--bg-preview);
+  scroll-padding-top: 18px;
 }
 
 .preview-article {
@@ -601,12 +628,15 @@ body.platform-linux .titlebar {
 .preview-article h1,
 .preview-article h2,
 .preview-article h3,
-.preview-article h4 {
+.preview-article h4,
+.preview-article h5,
+.preview-article h6 {
   font-family: var(--display);
   font-weight: 700;
   line-height: 1.28;
   letter-spacing: -0.02em;
   color: var(--preview-heading);
+  scroll-margin-top: 18px;
 }
 
 .preview-article h1 {
@@ -629,6 +659,25 @@ body.platform-linux .titlebar {
 .preview-article h4 {
   font-size: 1.05rem;
   margin: 1.4rem 0 0.5rem;
+}
+
+.preview-article h5,
+.preview-article h6 {
+  font-size: 1rem;
+  margin: 1.2rem 0 0.4rem;
+}
+
+.preview-article .heading-flash {
+  animation: heading-flash 1.1s ease;
+}
+
+@keyframes heading-flash {
+  0% {
+    background: var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
 }
 
 .preview-article p {
@@ -736,6 +785,101 @@ body.platform-linux .titlebar {
   color: var(--faint);
   font-size: 13px;
   font-family: var(--ui);
+}
+
+.outline {
+  width: 208px;
+  flex: 0 0 208px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg-raise);
+}
+
+.outline-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.outline-head em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+.outline-list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 6px 12px;
+}
+
+.outline-empty {
+  margin: 28px 12px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.outline-empty small {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.outline-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 8px 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  min-height: 28px;
+}
+
+.outline-item:hover {
+  background: var(--hover-row);
+}
+
+.outline-item.active {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.outline-lv {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+
+.outline-item.active .outline-lv {
+  color: var(--accent);
+}
+
+.outline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .empty-workspace {

@@ -92,6 +92,7 @@ export type MenuAction =
   | "rename"
   | "settings"
   | "about"
+  | "outline"
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"

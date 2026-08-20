@@ -187,6 +187,8 @@ function createMenu(): void {
         { type: "separator" },
         { role: "togglefullscreen", label: "全屏" },
         { type: "separator" },
+        { label: "大纲", accelerator: "CmdOrCtrl+Shift+O", click: () => sendMenu("outline") },
+        { type: "separator" },
         {
           label: "外观",
           submenu: THEME_IDS.map((id) => ({

@@ -7,6 +7,7 @@ import {
   Italic,
   Link,
   List,
+  ListTree,
   Plus,
   Quote,
   Save,
@@ -16,7 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "./components/AboutModal";
 import { EditorPane, type EditorHandle } from "./components/EditorPane";
 import { NewPostModal } from "./components/NewPostModal";
-import { Preview } from "./components/Preview";
+import { Outline } from "./components/Outline";
+import { Preview, type PreviewHandle } from "./components/Preview";
 import { RemoteBar } from "./components/RemoteBar";
 import { RemoteLog } from "./components/RemoteLog";
 import { RenamePostModal } from "./components/RenamePostModal";
@@ -24,14 +26,24 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar, type SidebarTab } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { api } from "./lib/api";
-import { countWords, imageFileName, parseTitle } from "./lib/markdown";
+import { countWords, extractHeadings, imageFileName, parseTitle } from "./lib/markdown";
 import { applyTheme, normalizeTheme } from "./lib/theme";
 import type { AppInfo, AppSettings, PostFolder, PostOrigin, PostSummary, SshLogEvent, SshStatus, TemplateSet } from "./lib/types";
 
 type Toast = { kind: "ok" | "err"; text: string };
 
+function readOutlineOpen(): boolean {
+  try {
+    return window.localStorage.getItem("hexomd.outline") !== "0";
+  } catch {
+    return true;
+  }
+}
+
 export default function App() {
   const editorRef = useRef<EditorHandle>(null);
+  const previewRef = useRef<PreviewHandle>(null);
+  const outlineLock = useRef(0);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [templates, setTemplates] = useState<TemplateSet | null>(null);
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -57,13 +69,40 @@ export default function App() {
   const [logOpen, setLogOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [outlineOpen, setOutlineOpen] = useState(readOutlineOpen);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
 
   const dirty = content !== saved;
   const words = useMemo(() => countWords(content), [content]);
+  const headings = useMemo(() => extractHeadings(content), [content]);
   const title = parseTitle(content) || path?.split("/").pop() || "Hexo Markdown";
 
   const notify = useCallback((kind: Toast["kind"], text: string) => {
     setToast({ kind, text });
+  }, []);
+
+  const toggleOutline = useCallback(() => {
+    setOutlineOpen((open) => {
+      const next = !open;
+      try {
+        window.localStorage.setItem("hexomd.outline", next ? "1" : "0");
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  }, []);
+
+  const setVisibleHeading = useCallback((id: string | null) => {
+    if (Date.now() < outlineLock.current) return;
+    setActiveHeadingId(id);
+  }, []);
+
+  const jumpToHeading = useCallback((heading: { id: string; line: number }) => {
+    outlineLock.current = Date.now() + 500;
+    setActiveHeadingId(heading.id);
+    previewRef.current?.scrollToHeading(heading.id);
+    editorRef.current?.gotoLine(heading.line);
   }, []);
 
   useEffect(() => {
@@ -147,6 +186,10 @@ export default function App() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
+
+  useEffect(() => {
+    setActiveHeadingId(null);
+  }, [path, editingOrigin]);
 
   const openPost = useCallback(
     async (post: PostSummary) => {
@@ -404,6 +447,7 @@ export default function App() {
         }
         if (action === "settings") setSettingsOpen(true);
         if (action === "about") setAboutOpen(true);
+        if (action === "outline") toggleOutline();
         if (action === "ssh-connect") void runRemote("已连接 SSH", () => api.sshConnect());
         if (action === "ssh-disconnect") void runRemote("已断开 SSH", () => api.sshDisconnect());
         if (action === "ssh-pull") void runRemote("拉取完成", () => api.sshPull());
@@ -426,7 +470,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected]);
+  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleOutline]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -543,6 +587,14 @@ export default function App() {
             <button onClick={pickImage} title="插入图片并上传">
               <ImagePlus size={15} />
             </button>
+            <button
+              className={outlineOpen ? "on" : ""}
+              onClick={toggleOutline}
+              title="大纲 Ctrl+Shift+O"
+              disabled={!path}
+            >
+              <ListTree size={15} />
+            </button>
             <span className="toolbar-note">
               {editingOrigin === "remote"
                 ? "远程文章 · 保存即写回服务器"
@@ -587,8 +639,19 @@ export default function App() {
                 <EditorPane ref={editorRef} value={content} onChange={setContent} onPasteImage={handlePasteImage} />
               </div>
               <div className="divider" onMouseDown={startResize} />
-              <div className="pane preview-pane">
-                <Preview markdown={content} postPath={path} origin={editingOrigin} />
+              <div className="preview-stage">
+                <div className="pane preview-pane">
+                  <Preview
+                    ref={previewRef}
+                    markdown={content}
+                    postPath={path}
+                    origin={editingOrigin}
+                    onActiveHeading={setVisibleHeading}
+                  />
+                </div>
+                {outlineOpen ? (
+                  <Outline headings={headings} activeId={activeHeadingId} onSelect={jumpToHeading} />
+                ) : null}
               </div>
             </div>
           ) : (
