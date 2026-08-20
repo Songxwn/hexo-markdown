@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_THEME, normalizeTheme } from "./theme";
+import { DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, normalizeFontFamily, normalizeFontSize } from "./typography";
 import type { AppConfig } from "./types";
 
 let dataDir = join(process.cwd(), "data");
@@ -64,6 +65,8 @@ export function defaultConfig(): AppConfig {
     sshDeployCmd: process.env.SSH_DEPLOY_CMD?.trim() || "npx hexo deploy",
     autoUploadOnSave: process.env.SSH_AUTO_UPLOAD === "1",
     theme: normalizeTheme(process.env.THEME || DEFAULT_THEME),
+    fontFamily: normalizeFontFamily(process.env.FONT_FAMILY || DEFAULT_FONT_FAMILY),
+    fontSize: normalizeFontSize(process.env.FONT_SIZE || DEFAULT_FONT_SIZE),
   };
 }
 
@@ -84,6 +87,8 @@ function normalize(cfg: AppConfig): AppConfig {
   cfg.remoteHexoRoot = (cfg.remoteHexoRoot || "").replace(/\\/g, "/").replace(/\/+$/, "");
   if (cfg.r2PublicUrl) cfg.r2PublicUrl = cfg.r2PublicUrl.replace(/\/+$/, "");
   cfg.theme = normalizeTheme(cfg.theme);
+  cfg.fontFamily = normalizeFontFamily(cfg.fontFamily);
+  cfg.fontSize = normalizeFontSize(cfg.fontSize);
   return cfg;
 }
 

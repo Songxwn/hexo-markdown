@@ -53,6 +53,7 @@ type HexoDesktopAPI = {
   sshExec: (kind: "generate" | "deploy" | "full") => Promise<{ code: number }>;
   onMenu: (handler: (action: MenuAction) => void) => () => void;
   onTheme: (handler: (theme: string) => void) => () => void;
+  onTypography: (handler: (value: { fontFamily: string; fontSize: number }) => void) => () => void;
   onSshLog: (handler: (event: SshLogEvent) => void) => () => void;
   onSshStatus: (handler: (status: SshStatus) => void) => () => void;
 };

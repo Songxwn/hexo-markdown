@@ -1,6 +1,7 @@
 import type { ThemeId } from "./theme";
+import type { FontFamilyId } from "./typography";
 
-export type { ThemeId };
+export type { ThemeId, FontFamilyId };
 
 export type PostFolder = "posts" | "drafts";
 
@@ -49,6 +50,8 @@ export type AppSettings = {
   sshDeployCmd: string;
   autoUploadOnSave: boolean;
   theme: ThemeId;
+  fontFamily: FontFamilyId;
+  fontSize: number;
   r2Configured: boolean;
   sshConfigured: boolean;
   hexoValid: boolean;

@@ -17,6 +17,17 @@ import {
 import { initConfig, loadConfig } from "../server/config";
 import { DEFAULT_THEME, THEME_CHROME, THEME_IDS, THEME_LABELS, normalizeTheme, type ThemeId } from "../server/theme";
 import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
+  FONT_IDS,
+  FONT_LABELS,
+  FONT_SIZE_STEPS,
+  normalizeFontFamily,
+  normalizeFontSize,
+  stepFontSize,
+  type FontFamilyId,
+} from "../server/typography";
+import {
   getPost,
   getPosts,
   getRemotePosts,
@@ -83,6 +94,22 @@ function currentTheme(): ThemeId {
   }
 }
 
+function currentFontFamily(): FontFamilyId {
+  try {
+    return normalizeFontFamily(loadConfig().fontFamily);
+  } catch {
+    return DEFAULT_FONT_FAMILY;
+  }
+}
+
+function currentFontSize(): number {
+  try {
+    return normalizeFontSize(loadConfig().fontSize);
+  } catch {
+    return DEFAULT_FONT_SIZE;
+  }
+}
+
 function applyWindowChrome(theme: ThemeId): void {
   const chrome = THEME_CHROME[theme] || THEME_CHROME[DEFAULT_THEME];
   if (!mainWindow) return;
@@ -105,6 +132,15 @@ function persistTheme(theme: ThemeId): void {
   updateSettings({ theme: id });
   applyWindowChrome(id);
   mainWindow?.webContents.send("theme", id);
+  createMenu();
+}
+
+function persistTypography(patch: { fontFamily?: FontFamilyId; fontSize?: number }): void {
+  const next = updateSettings(patch);
+  mainWindow?.webContents.send("typography", {
+    fontFamily: normalizeFontFamily(next.fontFamily),
+    fontSize: normalizeFontSize(next.fontSize),
+  });
   createMenu();
 }
 
@@ -181,10 +217,6 @@ function createMenu(): void {
         { role: "forceReload", label: "强制重新加载" },
         { role: "toggleDevTools", label: "开发者工具" },
         { type: "separator" },
-        { role: "resetZoom", label: "实际大小" },
-        { role: "zoomIn", label: "放大" },
-        { role: "zoomOut", label: "缩小" },
-        { type: "separator" },
         { role: "togglefullscreen", label: "全屏" },
         { type: "separator" },
         { label: "大纲", accelerator: "CmdOrCtrl+Shift+O", click: () => sendMenu("outline") },
@@ -197,6 +229,49 @@ function createMenu(): void {
             checked: currentTheme() === id,
             click: () => persistTheme(id),
           })),
+        },
+        {
+          label: "字体",
+          submenu: FONT_IDS.map((id) => ({
+            label: FONT_LABELS[id],
+            type: "radio" as const,
+            checked: currentFontFamily() === id,
+            click: () => persistTypography({ fontFamily: id }),
+          })),
+        },
+        {
+          label: "文字大小",
+          submenu: [
+            {
+              label: "增大",
+              accelerator: "CmdOrCtrl+=",
+              click: () => persistTypography({ fontSize: stepFontSize(currentFontSize(), 1) }),
+            },
+            {
+              label: "增大",
+              accelerator: "CmdOrCtrl+Plus",
+              visible: false,
+              acceleratorWorksWhenHidden: true,
+              click: () => persistTypography({ fontSize: stepFontSize(currentFontSize(), 1) }),
+            },
+            {
+              label: "减小",
+              accelerator: "CmdOrCtrl+-",
+              click: () => persistTypography({ fontSize: stepFontSize(currentFontSize(), -1) }),
+            },
+            {
+              label: "重置",
+              accelerator: "CmdOrCtrl+0",
+              click: () => persistTypography({ fontSize: DEFAULT_FONT_SIZE }),
+            },
+            { type: "separator" },
+            ...FONT_SIZE_STEPS.map((size) => ({
+              label: `${size} px${size === DEFAULT_FONT_SIZE ? "（标准）" : ""}`,
+              type: "radio" as const,
+              checked: currentFontSize() === size,
+              click: () => persistTypography({ fontSize: size }),
+            })),
+          ],
         },
       ],
     },

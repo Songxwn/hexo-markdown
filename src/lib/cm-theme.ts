@@ -2,19 +2,16 @@ import { EditorView } from "@codemirror/view";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 
-const editorFont =
-  '"JetBrains Mono", "IBM Plex Mono", "Cascadia Code", "Sarasa Gothic SC", "Noto Sans SC", ui-monospace, monospace';
-
 export const inkTheme = EditorView.theme(
   {
     "&": {
       height: "100%",
-      fontSize: "15px",
+      fontSize: "var(--cm-font-size, 15px)",
       backgroundColor: "transparent",
       color: "var(--cm-fg)",
     },
     ".cm-scroller": {
-      fontFamily: editorFont,
+      fontFamily: "var(--mono)",
       lineHeight: "1.78",
       fontVariantLigatures: "contextual",
     },
@@ -36,7 +33,7 @@ export const inkTheme = EditorView.theme(
       backgroundColor: "transparent",
       color: "var(--cm-gutter)",
       border: "none",
-      fontSize: "11.5px",
+      fontSize: "calc(11.5px * var(--font-scale, 1))",
     },
     ".cm-activeLineGutter": {
       backgroundColor: "transparent",

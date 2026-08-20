@@ -25,6 +25,7 @@ import {
 } from "./ssh";
 import { listTemplates, saveTemplates } from "./templates";
 import { normalizeTheme } from "./theme";
+import { normalizeFontFamily, normalizeFontSize } from "./typography";
 import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "./types";
 
 const IMAGE_TYPES = new Set([
@@ -69,6 +70,8 @@ export function publicConfig() {
     sshDeployCmd: cfg.sshDeployCmd,
     autoUploadOnSave: cfg.autoUploadOnSave,
     theme: cfg.theme,
+    fontFamily: cfg.fontFamily,
+    fontSize: cfg.fontSize,
     r2Configured: isR2Configured(cfg),
     sshConfigured: isSshConfigured(),
     hexoValid: hexo.ok,
@@ -127,6 +130,12 @@ export function updateSettings(body: Partial<AppConfig> & Record<string, unknown
   }
   if (typeof body.theme === "string") {
     patch.theme = normalizeTheme(body.theme);
+  }
+  if (typeof body.fontFamily === "string") {
+    patch.fontFamily = normalizeFontFamily(body.fontFamily);
+  }
+  if (body.fontSize !== undefined && body.fontSize !== null && body.fontSize !== "") {
+    patch.fontSize = normalizeFontSize(body.fontSize);
   }
   saveConfig({ ...current, ...patch });
   return publicConfig();

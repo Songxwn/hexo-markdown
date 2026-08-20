@@ -69,6 +69,14 @@ const api = {
     ipcRenderer.on("theme", listener);
     return () => ipcRenderer.removeListener("theme", listener);
   },
+  onTypography: (handler: (value: { fontFamily: string; fontSize: number }) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      value: { fontFamily: string; fontSize: number },
+    ) => handler(value);
+    ipcRenderer.on("typography", listener);
+    return () => ipcRenderer.removeListener("typography", listener);
+  },
   onSshLog: (handler: (event: { kind: "out" | "err" | "sys"; text: string; ts: number }) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

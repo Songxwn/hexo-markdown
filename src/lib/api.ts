@@ -136,6 +136,10 @@ export const api = {
     return desktop().onTheme(handler);
   },
 
+  onTypography(handler: (value: { fontFamily: string; fontSize: number }) => void): () => void {
+    return desktop().onTypography(handler);
+  },
+
   onSshLog(handler: (event: SshLogEvent) => void): () => void {
     return desktop().onSshLog(handler);
   },

@@ -31,6 +31,7 @@ import { StatusBar } from "./components/StatusBar";
 import { api } from "./lib/api";
 import { countWords, extractHeadings, imageFileName, parseTitle } from "./lib/markdown";
 import { applyTheme, normalizeTheme } from "./lib/theme";
+import { applyTypography, normalizeFontFamily, normalizeFontSize } from "./lib/typography";
 import type { AppInfo, AppSettings, PostFolder, PostOrigin, PostSummary, SshLogEvent, SshStatus, TemplateSet } from "./lib/types";
 
 type Toast = { kind: "ok" | "err"; text: string };
@@ -190,6 +191,7 @@ export default function App() {
       setSettings(next);
       if (tpl) setTemplates(tpl);
       applyTheme(normalizeTheme(next.theme));
+      applyTypography(next.fontFamily, next.fontSize);
       if (info) setAppInfo(info);
       try {
         setSsh(await api.sshStatus());
@@ -212,6 +214,15 @@ export default function App() {
       const id = normalizeTheme(theme);
       applyTheme(id);
       setSettings((prev) => (prev ? { ...prev, theme: id } : prev));
+    });
+  }, []);
+
+  useEffect(() => {
+    return api.onTypography((value) => {
+      const fontFamily = normalizeFontFamily(value.fontFamily);
+      const fontSize = normalizeFontSize(value.fontSize);
+      applyTypography(fontFamily, fontSize);
+      setSettings((prev) => (prev ? { ...prev, fontFamily, fontSize } : prev));
     });
   }, []);
 
@@ -374,6 +385,7 @@ export default function App() {
         setSettings(next);
         setTemplates(tpl);
         applyTheme(normalizeTheme(next.theme));
+        applyTypography(next.fontFamily, next.fontSize);
         setSettingsOpen(false);
         notify("ok", "设置已保存");
         if (next.hexoValid) await refreshPosts();
@@ -797,7 +809,10 @@ export default function App() {
         saving={savingSettings}
         version={appInfo?.version}
         onClose={() => {
-          if (settings) applyTheme(normalizeTheme(settings.theme));
+          if (settings) {
+            applyTheme(normalizeTheme(settings.theme));
+            applyTypography(settings.fontFamily, settings.fontSize);
+          }
           setSettingsOpen(false);
         }}
         onSave={saveSettings}

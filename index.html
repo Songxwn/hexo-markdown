@@ -13,13 +13,77 @@
             document.documentElement.style.colorScheme = t === "paper" ? "light" : "dark";
           }
         } catch (e) {}
+        try {
+          var stacks = {
+            default: {
+              ui: '"Inter", "Noto Sans SC", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif',
+              preview: '"LXGW WenKai", "Source Serif 4", "Noto Serif SC", "Songti SC", "STSong", serif',
+              mono: '"JetBrains Mono", "IBM Plex Mono", "Cascadia Code", "Sarasa Gothic SC", Consolas, monospace',
+              display: '"Fraunces", "Noto Serif SC", "Songti SC", serif',
+              serif: '"Source Serif 4", "Noto Serif SC", "Songti SC", "STSong", serif',
+            },
+            system: {
+              ui: 'system-ui, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif',
+              preview: 'system-ui, "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif',
+              mono: 'ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, monospace',
+              display: 'system-ui, "Microsoft YaHei UI", sans-serif',
+              serif: '"Noto Serif SC", "Songti SC", SimSun, serif',
+            },
+            sans: {
+              ui: '"Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif',
+              preview: '"Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif',
+              mono: '"JetBrains Mono", "Sarasa Gothic SC", Consolas, monospace',
+              display: '"Noto Sans SC", "Microsoft YaHei UI", sans-serif',
+              serif: '"Noto Serif SC", "Songti SC", serif',
+            },
+            serif: {
+              ui: '"Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif',
+              preview: '"Noto Serif SC", "Source Serif 4", "Songti SC", SimSun, serif',
+              mono: '"JetBrains Mono", Consolas, monospace',
+              display: '"Noto Serif SC", "Songti SC", serif',
+              serif: '"Noto Serif SC", "Songti SC", SimSun, serif',
+            },
+            kai: {
+              ui: '"LXGW WenKai", "KaiTi", "STKaiti", "Noto Serif SC", serif',
+              preview: '"LXGW WenKai", "KaiTi", "STKaiti", "Noto Serif SC", serif',
+              mono: '"JetBrains Mono", Consolas, monospace',
+              display: '"LXGW WenKai", "KaiTi", serif',
+              serif: '"LXGW WenKai", "Noto Serif SC", serif',
+            },
+            mono: {
+              ui: '"JetBrains Mono", "Noto Sans SC", "Microsoft YaHei UI", sans-serif',
+              preview: '"JetBrains Mono", "Noto Sans SC", "Microsoft YaHei UI", sans-serif',
+              mono: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+              display: '"JetBrains Mono", "Noto Sans SC", sans-serif',
+              serif: '"Noto Serif SC", "Songti SC", serif',
+            },
+          };
+          var f = localStorage.getItem("hexo-font");
+          if (!stacks[f]) f = "default";
+          var size = parseInt(localStorage.getItem("hexo-font-size") || "14", 10);
+          if (!isFinite(size) || size < 12) size = 12;
+          if (size > 20) size = 20;
+          var scale = size / 14;
+          var root = document.documentElement;
+          var stack = stacks[f];
+          root.dataset.font = f;
+          root.style.setProperty("--font-scale", String(scale));
+          root.style.setProperty("--app-font-size", size + "px");
+          root.style.setProperty("--cm-font-size", (15 * scale).toFixed(2) + "px");
+          root.style.setProperty("--preview-font-size", (18 * scale).toFixed(2) + "px");
+          root.style.setProperty("--ui", stack.ui);
+          root.style.setProperty("--preview", stack.preview);
+          root.style.setProperty("--mono", stack.mono);
+          root.style.setProperty("--display", stack.display);
+          root.style.setProperty("--serif", stack.serif);
+        } catch (e) {}
       })();
     </script>
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=LXGW+WenKai:wght@400;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=LXGW+WenKai:wght@400;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap"
       rel="stylesheet"
     />
   </head>

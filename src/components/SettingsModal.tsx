@@ -2,6 +2,17 @@ import { FolderOpen, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { applyTheme, DEFAULT_THEME, THEMES } from "../lib/theme";
+import {
+  applyTypography,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
+  FONT_IDS,
+  FONT_LABELS,
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  FONT_SIZE_STEPS,
+  fontStack,
+} from "../lib/typography";
 import type { AppSettings, PostTemplate, TemplateSet } from "../lib/types";
 
 type Props = {
@@ -34,6 +45,8 @@ const empty: Partial<AppSettings> = {
   sshDeployCmd: "npx hexo deploy",
   autoUploadOnSave: false,
   theme: DEFAULT_THEME,
+  fontFamily: DEFAULT_FONT_FAMILY,
+  fontSize: DEFAULT_FONT_SIZE,
 };
 
 const defaultTemplateBody = `---
@@ -89,6 +102,8 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
         sshDeployCmd: settings.sshDeployCmd || "npx hexo deploy",
         autoUploadOnSave: Boolean(settings.autoUploadOnSave),
         theme: settings.theme || DEFAULT_THEME,
+        fontFamily: settings.fontFamily || DEFAULT_FONT_FAMILY,
+        fontSize: settings.fontSize || DEFAULT_FONT_SIZE,
       });
       const next = cloneUserTemplates(templates);
       setTpl(next);
@@ -103,6 +118,7 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
   }
 
   const currentTpl = tpl.items.find((item) => item.id === activeTpl) || tpl.items[0];
+  const shortcutMod = window.hexo?.platform === "darwin" ? "⌘" : "Ctrl";
 
   function patchTpl(id: string, patch: Partial<PostTemplate>) {
     setTpl((prev) => ({
@@ -161,6 +177,75 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
               </button>
             );
           })}
+        </div>
+
+        <h3>字体</h3>
+        <p className="section-hint">作用于界面、源码编辑器和右侧预览。也可从菜单栏「视图 → 字体」切换。</p>
+        <div className="font-grid">
+          {FONT_IDS.map((id) => {
+            const meta = FONT_LABELS[id];
+            const selected = (form.fontFamily || DEFAULT_FONT_FAMILY) === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`skin-card font-card ${selected ? "on" : ""}`}
+                onClick={() => {
+                  set("fontFamily", id);
+                  applyTypography(id, form.fontSize || DEFAULT_FONT_SIZE, { persist: false });
+                }}
+              >
+                <span className="font-sample" style={{ fontFamily: fontStack(id) }}>
+                  {meta.sample}
+                </span>
+                <strong>{meta.name}</strong>
+                <small>{meta.desc}</small>
+              </button>
+            );
+          })}
+        </div>
+
+        <h3>文字大小</h3>
+        <p className="section-hint">
+          调整整体字号，不含图片缩放。快捷键：增大 <kbd>{shortcutMod}</kbd>+<kbd>=</kbd>，减小 <kbd>{shortcutMod}</kbd>+<kbd>-</kbd>
+          ，重置 <kbd>{shortcutMod}</kbd>+<kbd>0</kbd>。也可从菜单栏「视图 → 文字大小」选择。
+        </p>
+        <div className="type-size">
+          <div className="type-size-head">
+            <span>当前 {form.fontSize || DEFAULT_FONT_SIZE} px</span>
+            <small>范围 {FONT_SIZE_MIN}–{FONT_SIZE_MAX}</small>
+          </div>
+          <input
+            type="range"
+            min={FONT_SIZE_MIN}
+            max={FONT_SIZE_MAX}
+            step={1}
+            value={form.fontSize || DEFAULT_FONT_SIZE}
+            onChange={(e) => {
+              const fontSize = Number(e.target.value) || DEFAULT_FONT_SIZE;
+              set("fontSize", fontSize);
+              applyTypography(form.fontFamily || DEFAULT_FONT_FAMILY, fontSize, { persist: false });
+            }}
+          />
+          <div className="type-size-marks">
+            {FONT_SIZE_STEPS.map((size) => {
+              const selected = (form.fontSize || DEFAULT_FONT_SIZE) === size;
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  className={selected ? "on" : ""}
+                  onClick={() => {
+                    set("fontSize", size);
+                    applyTypography(form.fontFamily || DEFAULT_FONT_FAMILY, size, { persist: false });
+                  }}
+                >
+                  {size}
+                  {size === DEFAULT_FONT_SIZE ? " 标准" : ""}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <h3>本地 Hexo</h3>

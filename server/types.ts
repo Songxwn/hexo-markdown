@@ -1,4 +1,5 @@
 import type { ThemeId } from "./theme";
+import type { FontFamilyId } from "./typography";
 
 export type AppConfig = {
   hexoRoot: string;
@@ -20,6 +21,8 @@ export type AppConfig = {
   sshDeployCmd: string;
   autoUploadOnSave: boolean;
   theme: ThemeId;
+  fontFamily: FontFamilyId;
+  fontSize: number;
 };
 
 export type PublicConfig = Omit<AppConfig, "r2SecretAccessKey" | "sshPassword" | "sshPassphrase"> & {
