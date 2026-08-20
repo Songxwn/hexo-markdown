@@ -1,5 +1,6 @@
 import {
   Bold,
+  Check,
   Code,
   Heading,
   ImagePlus,
@@ -8,6 +9,7 @@ import {
   Link,
   List,
   ListTree,
+  Loader2,
   Plus,
   Quote,
   Save,
@@ -15,6 +17,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "./components/AboutModal";
+import { ActionFx, originFrom, type ActionFxKind, type ActionFxState } from "./components/ActionFx";
 import { EditorPane, type EditorHandle, type EditorScrollPos } from "./components/EditorPane";
 import { NewPostModal } from "./components/NewPostModal";
 import { Outline } from "./components/Outline";
@@ -73,6 +76,13 @@ export default function App() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [outlineOpen, setOutlineOpen] = useState(readOutlineOpen);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const [saveFlash, setSaveFlash] = useState(false);
+  const [actionFx, setActionFx] = useState<ActionFxState | null>(null);
+  const [remoteKind, setRemoteKind] = useState<"deploy" | "other" | null>(null);
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
+  const deployBtnRef = useRef<HTMLButtonElement>(null);
+  const rocketBtnRef = useRef<HTMLButtonElement>(null);
+  const saveFlashTimer = useRef(0);
 
   const dirty = content !== saved;
   const words = useMemo(() => countWords(content), [content]);
@@ -82,6 +92,14 @@ export default function App() {
   const notify = useCallback((kind: Toast["kind"], text: string) => {
     setToast({ kind, text });
   }, []);
+
+  const playFx = useCallback((kind: ActionFxKind, el: HTMLElement | null) => {
+    const origin = originFrom(el);
+    if (!origin) return;
+    setActionFx({ kind, ...origin, key: Date.now() });
+  }, []);
+
+  const clearFx = useCallback(() => setActionFx(null), []);
 
   const toggleOutline = useCallback(() => {
     setOutlineOpen((open) => {
@@ -119,6 +137,10 @@ export default function App() {
   const restorePreviewScroll = useCallback(() => {
     if (Date.now() < outlineLock.current) return;
     previewRef.current?.scrollToSourceLine(editorScrollRef.current);
+  }, []);
+
+  useEffect(() => {
+    return () => window.clearTimeout(saveFlashTimer.current);
   }, []);
 
   useEffect(() => {
@@ -246,6 +268,10 @@ export default function App() {
         notify("ok", "已保存");
         await refreshPosts();
       }
+      playFx("save", saveBtnRef.current);
+      setSaveFlash(true);
+      window.clearTimeout(saveFlashTimer.current);
+      saveFlashTimer.current = window.setTimeout(() => setSaveFlash(false), 1200);
     } catch (error) {
       notify("err", error instanceof Error ? error.message : "保存失败");
     } finally {
@@ -260,6 +286,7 @@ export default function App() {
     refreshRemotePosts,
     settings?.autoUploadOnSave,
     settings?.sshConfigured,
+    playFx,
   ]);
 
   const createPost = useCallback(
@@ -388,18 +415,22 @@ export default function App() {
   );
 
   const runRemote = useCallback(
-    async (label: string, fn: () => Promise<unknown>) => {
+    async (label: string, fn: () => Promise<unknown>, fx?: { kind: ActionFxKind; el: HTMLElement | null }) => {
       setLogOpen(true);
+      setRemoteKind(fx?.kind === "deploy" ? "deploy" : "other");
       try {
         await fn();
         notify("ok", label);
+        if (fx) playFx(fx.kind, fx.el);
         await refreshPosts();
         await refreshRemotePosts(true);
       } catch (error) {
         notify("err", error instanceof Error ? error.message : label);
+      } finally {
+        setRemoteKind(null);
       }
     },
-    [notify, refreshPosts, refreshRemotePosts],
+    [notify, playFx, refreshPosts, refreshRemotePosts],
   );
 
   useEffect(() => {
@@ -481,8 +512,18 @@ export default function App() {
         }
         if (action === "ssh-push-all") void runRemote("已推送全部文章", () => api.sshPush());
         if (action === "hexo-generate") void runRemote("生成完成", () => api.sshExec("generate"));
-        if (action === "hexo-deploy") void runRemote("部署完成", () => api.sshExec("deploy"));
-        if (action === "hexo-full") void runRemote("生成并部署完成", () => api.sshExec("full"));
+        if (action === "hexo-deploy") {
+          void runRemote("部署完成", () => api.sshExec("deploy"), {
+            kind: "deploy",
+            el: deployBtnRef.current,
+          });
+        }
+        if (action === "hexo-full") {
+          void runRemote("生成并部署完成", () => api.sshExec("full"), {
+            kind: "deploy",
+            el: rocketBtnRef.current,
+          });
+        }
       });
     } catch {
       return undefined;
@@ -545,9 +586,14 @@ export default function App() {
             <Plus size={15} />
             新建
           </button>
-          <button className="btn primary" onClick={() => void savePost()} disabled={savingPost || !path}>
-            <Save size={15} />
-            {savingPost ? "保存中" : "保存"}
+          <button
+            ref={saveBtnRef}
+            className={`btn primary${savingPost ? " is-busy" : ""}${saveFlash ? " is-ok" : ""}`}
+            onClick={() => void savePost()}
+            disabled={savingPost || !path}
+          >
+            {savingPost ? <Loader2 size={15} className="spin" /> : saveFlash ? <Check size={15} /> : <Save size={15} />}
+            {savingPost ? "保存中" : saveFlash ? "已保存" : "保存"}
           </button>
           <button className="icon-btn" title="关于" onClick={() => setAboutOpen(true)}>
             <Info size={16} />
@@ -644,10 +690,23 @@ export default function App() {
             }}
             onPushAll={() => void runRemote("已推送全部文章", () => api.sshPush())}
             onGenerate={() => void runRemote("生成完成", () => api.sshExec("generate"))}
-            onDeploy={() => void runRemote("部署完成", () => api.sshExec("deploy"))}
-            onFull={() => void runRemote("生成并部署完成", () => api.sshExec("full"))}
+            onDeploy={() =>
+              void runRemote("部署完成", () => api.sshExec("deploy"), {
+                kind: "deploy",
+                el: deployBtnRef.current,
+              })
+            }
+            onFull={() =>
+              void runRemote("生成并部署完成", () => api.sshExec("full"), {
+                kind: "deploy",
+                el: rocketBtnRef.current,
+              })
+            }
             onToggleLog={() => setLogOpen((open) => !open)}
             onOpenSettings={() => setSettingsOpen(true)}
+            launching={remoteKind === "deploy"}
+            deployRef={deployBtnRef}
+            rocketRef={rocketBtnRef}
           />
 
           {path ? (
@@ -766,6 +825,7 @@ export default function App() {
       />
 
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}
+      <ActionFx key={actionFx?.key ?? "idle"} fx={actionFx} onDone={clearFx} />
     </div>
   );
 }

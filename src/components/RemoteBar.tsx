@@ -1,4 +1,5 @@
 import { CloudUpload, Download, Plug, PlugZap, Rocket, ScrollText, Upload } from "lucide-react";
+import type { Ref } from "react";
 import type { SshStatus } from "../lib/types";
 
 type Props = {
@@ -6,6 +7,9 @@ type Props = {
   configured: boolean;
   hasCurrent: boolean;
   logOpen: boolean;
+  launching?: boolean;
+  deployRef?: Ref<HTMLButtonElement>;
+  rocketRef?: Ref<HTMLButtonElement>;
   onConnect: () => void;
   onDisconnect: () => void;
   onPull: () => void;
@@ -33,6 +37,9 @@ export function RemoteBar({
   onFull,
   onToggleLog,
   onOpenSettings,
+  launching = false,
+  deployRef,
+  rocketRef,
 }: Props) {
   if (!configured) {
     return (
@@ -75,10 +82,22 @@ export function RemoteBar({
       <button disabled={disabled || !ssh.connected} onClick={onGenerate} title="远程 hexo generate">
         生成
       </button>
-      <button disabled={disabled || !ssh.connected} onClick={onDeploy} title="远程 hexo deploy">
+      <button
+        ref={deployRef}
+        className={launching ? "is-launching" : ""}
+        disabled={disabled || !ssh.connected}
+        onClick={onDeploy}
+        title="远程 hexo deploy"
+      >
         部署
       </button>
-      <button disabled={disabled || !ssh.connected} onClick={onFull} title="远程生成并部署">
+      <button
+        ref={rocketRef}
+        className={launching ? "is-launching" : ""}
+        disabled={disabled || !ssh.connected}
+        onClick={onFull}
+        title="远程生成并部署"
+      >
         <Rocket size={14} />
       </button>
       <button className={logOpen ? "on" : ""} onClick={onToggleLog} title="远程日志">

@@ -320,6 +320,28 @@ function rewriteLocalImages(html: string, postPath: string | null, origin: "loca
   });
 }
 
+function decodeAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function attrValue(tag: string, name: string): string {
+  const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`, "i"));
+  return match ? decodeAttr(match[1]).trim() : "";
+}
+
+function applyImageCaptions(html: string): string {
+  return html.replace(/<p(\b[^>]*)>\s*(<img\b[^>]*>)\s*<\/p>/gi, (_all, attrs: string, img: string) => {
+    const caption = attrValue(img, "title") || attrValue(img, "alt");
+    if (!caption) return `<p${attrs}>${img}</p>`;
+    return `<figure class="preview-figure"${attrs}>${img}<figcaption>${escapeAttr(caption)}</figcaption></figure>`;
+  });
+}
+
 export function renderMarkdown(
   raw: string,
   postPath: string | null,
@@ -329,11 +351,18 @@ export function renderMarkdown(
   const body = preprocessHexo(stripFrontMatter(raw));
   lineSource = body;
   lineBase = frontMatterNewlines(raw);
-  const html = applyPreDataLines(
-    applyHeadingIds(marked.parse(body, { async: false }) as string, headings),
-    extractFenceStartLines(body, lineBase),
+  const html = applyImageCaptions(
+    rewriteLocalImages(
+      applyPreDataLines(
+        applyHeadingIds(marked.parse(body, { async: false }) as string, headings),
+        extractFenceStartLines(body, lineBase),
+      ),
+      postPath,
+      origin,
+    ),
   );
-  return DOMPurify.sanitize(rewriteLocalImages(html, postPath, origin), {
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ["figure", "figcaption"],
     ADD_ATTR: ["target", "id"],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|hexomd|data|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
