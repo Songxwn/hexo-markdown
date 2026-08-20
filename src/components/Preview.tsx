@@ -1,7 +1,9 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { EditorScrollPos } from "./EditorPane";
+import { ImageLightbox } from "./ImageLightbox";
 import { api } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
+import { renderMermaidBlocks } from "../lib/mermaid";
 import type { PostOrigin } from "../lib/types";
 
 export type PreviewHandle = {
@@ -61,10 +63,19 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
   ref,
 ) {
   const articleRef = useRef<HTMLElement>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string; caption: string } | null>(null);
+  const [themeTick, setThemeTick] = useState(0);
   const html = useMemo(
     () => renderMarkdown(markdown, postPath, origin),
     [markdown, postPath, origin],
   );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => setThemeTick((n) => n + 1));
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useImperativeHandle(ref, () => ({
     scrollToHeading(id: string) {
@@ -102,6 +113,21 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
 
   useEffect(() => {
     const article = articleRef.current;
+    if (!article) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void renderMermaidBlocks(article, () => cancelled).then(() => {
+        if (!cancelled) onRender?.();
+      });
+    }, 160);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [html, themeTick, onRender]);
+
+  useEffect(() => {
+    const article = articleRef.current;
     if (!article || !onActiveHeading) return;
     const nodes = [...article.querySelectorAll("h1, h2, h3, h4, h5, h6")];
     if (!nodes.length) {
@@ -123,29 +149,61 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
     return () => io.disconnect();
   }, [html, onActiveHeading]);
 
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!article) return;
+    for (const img of article.querySelectorAll("img")) {
+      if (!img.title) img.title = "双击查看大图";
+    }
+  }, [html]);
+
   if (!markdown.trim()) {
     return (
       <div className="preview-empty">
         <p>预览会出现在这里</p>
-        <span>支持 GFM、代码高亮，以及常见 Hexo 标签</span>
+        <span>支持 GFM、代码高亮、Mermaid 流程图，以及常见 Hexo 标签</span>
       </div>
     );
   }
 
   return (
-    <article
-      ref={articleRef}
-      className="preview-article"
-      dangerouslySetInnerHTML={{ __html: html }}
-      onClick={(event) => {
-        const anchor = (event.target as HTMLElement).closest("a");
-        if (!anchor?.href) return;
-        if (/^https?:/i.test(anchor.href)) {
+    <>
+      <article
+        ref={articleRef}
+        className="preview-article"
+        dangerouslySetInnerHTML={{ __html: html }}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("img")) {
+            event.preventDefault();
+            return;
+          }
+          const anchor = (event.target as HTMLElement).closest("a");
+          if (!anchor?.href) return;
+          if (/^https?:/i.test(anchor.href)) {
+            event.preventDefault();
+            void api.openExternal(anchor.href);
+          }
+        }}
+        onDoubleClick={(event) => {
+          const img = (event.target as HTMLElement).closest("img");
+          if (!img) return;
+          const src = img.currentSrc || img.src;
+          if (!src || src.includes("uploading:")) return;
           event.preventDefault();
-          void api.openExternal(anchor.href);
-        }
-      }}
-    />
+          const figure = img.closest("figure");
+          const caption = figure?.querySelector("figcaption")?.textContent?.trim() || img.alt || "";
+          setLightbox({ src, alt: img.alt || "", caption });
+        }}
+      />
+      {lightbox ? (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          caption={lightbox.caption}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
+    </>
   );
 });
 

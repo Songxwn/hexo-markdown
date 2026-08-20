@@ -3,11 +3,19 @@ import hljs from "highlight.js";
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
 
+function isMermaidLang(lang: string | undefined | null): boolean {
+  const name = (lang || "").trim().toLowerCase();
+  return name === "mermaid" || name === "mmd";
+}
+
 const marked = new Marked(
   markedHighlight({
     emptyLangClass: "hljs",
     langPrefix: "hljs language-",
     highlight(code, lang) {
+      if (isMermaidLang(lang)) {
+        return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
       if (lang && hljs.getLanguage(lang)) {
         return hljs.highlight(code, { language: lang }).value;
       }
@@ -301,7 +309,10 @@ function preprocessHexo(md: string): string {
       (_all, lang: string | undefined, body: string) => {
         return `\`\`\`${lang || ""}\n${body.replace(/^\n|\n$/g, "")}\n\`\`\``;
       },
-    );
+    )
+    .replace(/\{%\s*mermaid\b[^%]*%\}([\s\S]*?)\{%\s*endmermaid\s*%\}/g, (_all, body: string) => {
+      return `\n\`\`\`mermaid\n${String(body).trim()}\n\`\`\`\n`;
+    });
 }
 
 function rewriteLocalImages(html: string, postPath: string | null, origin: "local" | "remote" = "local"): string {
@@ -342,6 +353,15 @@ function applyImageCaptions(html: string): string {
   });
 }
 
+function promoteMermaidBlocks(html: string): string {
+  return html.replace(
+    /<pre(\b[^>]*)>\s*<code\b([^>]*\blanguage-(?:mermaid|mmd)\b[^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi,
+    (_all, preAttrs: string, _codeAttrs: string, body: string) => {
+      return `<div class="preview-mermaid"${preAttrs}><pre class="mermaid-src">${body}</pre></div>`;
+    },
+  );
+}
+
 export function renderMarkdown(
   raw: string,
   postPath: string | null,
@@ -351,14 +371,16 @@ export function renderMarkdown(
   const body = preprocessHexo(stripFrontMatter(raw));
   lineSource = body;
   lineBase = frontMatterNewlines(raw);
-  const html = applyImageCaptions(
-    rewriteLocalImages(
-      applyPreDataLines(
-        applyHeadingIds(marked.parse(body, { async: false }) as string, headings),
-        extractFenceStartLines(body, lineBase),
+  const html = promoteMermaidBlocks(
+    applyImageCaptions(
+      rewriteLocalImages(
+        applyPreDataLines(
+          applyHeadingIds(marked.parse(body, { async: false }) as string, headings),
+          extractFenceStartLines(body, lineBase),
+        ),
+        postPath,
+        origin,
       ),
-      postPath,
-      origin,
     ),
   );
   return DOMPurify.sanitize(html, {

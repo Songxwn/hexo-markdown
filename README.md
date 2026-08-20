@@ -1,47 +1,316 @@
 # Hexo Markdown
 
-跨平台 Electron 桌面应用，用于编写 Hexo 博客：左侧编辑、右侧实时预览；粘贴或拖入图片会自动上传到 **Cloudflare R2**，并插入公开 URL。
+跨平台 Hexo 博客编辑器：左边写 Markdown，右边实时预览；粘贴图片可上传到 **Cloudflare R2**；可通过 **SSH / SFTP** 同步文章，并在服务器上执行 `hexo generate` / `hexo deploy`。
 
-支持 **Windows / macOS / Linux**。
+支持 **Windows / macOS / Linux**。当前版本见 [Releases](https://github.com/Songxwn/hexo-markdown/releases)。
 
-## 功能
+---
 
-- 实时渲染 GFM（表格、任务列表、代码高亮）
+## 目录
+
+- [能做什么](#能做什么)
+- [下载与安装](#下载与安装)
+- [使用教程](#使用教程)
+  - [第一次打开](#1-第一次打开)
+  - [界面说明](#2-界面说明)
+  - [写一篇文章](#3-写一篇文章)
+  - [图片](#4-图片)
+  - [预览、大纲与大图](#5-预览大纲与大图)
+  - [外观、字体和字号](#6-外观字体和字号)
+  - [远程同步与发布](#7-远程同步与发布)
+- [配置 Cloudflare R2](#配置-cloudflare-r2)
+- [配置 SSH / SFTP](#配置-ssh--sftp)
+- [快捷键](#快捷键)
+- [常见问题](#常见问题)
+- [开发](#开发)
+- [打包与 GitHub 自动编译](#打包与-github-自动编译)
+
+---
+
+## 能做什么
+
+- 编辑 `source/_posts`、`source/_drafts`，实时预览 GFM（表格、任务列表、代码高亮、**Mermaid 流程图**）
 - 识别常见 Hexo 标签：`asset_img`、`img`、`blockquote`、`codeblock`、`raw`
-- 读取 / 新建 / 保存 / 删除 `source/_posts` 与 `source/_drafts`
-- 系统菜单：`Ctrl/Cmd+S` 保存，`Ctrl/Cmd+N` 新建，`Ctrl/Cmd+,` 设置
-- 设置里可用系统对话框选择 Hexo 根目录
-- 粘贴、拖放、工具栏选图 → 上传 R2
-- 未配置 R2 时，回退到当前文章资源目录（`post.md` → `post/image.png`）
-- **SFTP**：从远程服务器拉取 / 推送 `source/_posts`、`source/_drafts` 中的 Markdown 及文章资源目录
-- **SSH**：在远程博客目录执行 `hexo generate` / `hexo deploy`
+- 新建文章套用模板；文件名只用标题，**不加日期前缀**（日期写在 front-matter）
+- 粘贴 / 拖入 / 工具栏选图：有 R2 则上传并插入公开 URL；没有则存到文章资源目录
+- 预览同步滚动、标题大纲、双击图片放大、Mermaid 流程图
+- 四种皮肤、六种字体、12–20px 字号
+- **已发布**列表走远程 SFTP，打开即可改服务器上的文章
+- SSH 远程执行生成 / 部署，底部有日志
 
-## 准备 Cloudflare R2
+---
 
-1. 在 Cloudflare 控制台创建 R2 存储桶。
+## 下载与安装
+
+1. 打开 [Releases](https://github.com/Songxwn/hexo-markdown/releases)，下载对应系统的安装包：
+   - Windows：`Hexo Markdown-Setup-*.exe`（NSIS 安装包）
+   - macOS：`.dmg`
+   - Linux：`.AppImage`
+2. 安装或运行后打开应用。首次启动会弹出**设置**，需要先绑定本地 Hexo 根目录。
+
+从源码运行见文末[开发](#开发)。
+
+---
+
+## 使用教程
+
+下面按日常写作顺序说明。快捷键里的 `Ctrl` 在 macOS 上换成 `⌘`。
+
+### 1. 第一次打开
+
+1. 点右上角齿轮，或菜单 **文件 → 设置…**（`Ctrl+,`）。
+2. 在 **本地 Hexo** 里填写博客根目录，或点「浏览」选择。必须是站点根目录（里面有 `_config.yml`），**不要**选 `source/_posts`。
+3. 目录里应有 `_config.yml` 和 `source/_posts`；`source/_drafts` 可选。
+4. 点 **保存设置**。标题栏下方会显示当前博客路径。
+
+配置只存在本机，不会上传。密钥类字段保存后再次打开会显示掩码，留空表示不修改。
+
+配置文件位置：
+
+| 系统 | 路径 |
+| --- | --- |
+| Windows | `%APPDATA%\hexo-markdown\data\config.json` |
+| macOS | `~/Library/Application Support/Hexo Markdown/data/config.json` |
+| Linux | `~/.config/hexo-markdown/data/config.json` |
+
+开发时也可把项目根目录的 `.env` 当作初始默认值，见 `.env.example`。
+
+### 2. 界面说明
+
+```
+┌ 标题栏：博客路径 · 当前文章 · 新建 / 保存 / 设置 ─────────────┐
+│ 侧栏          │ 工具栏（标题/粗体/图片/大纲）                    │
+│ 全部/已发布/草稿│ 远程栏（连接、拉取、推送、生成、部署、日志）     │
+│ 搜索 + 列表    │ 左：源码编辑          │ 右：预览  │ 大纲（可选）│
+└ 状态栏：保存状态 · 路径 · 字数 · R2/SSH · 版本 ─────────────────┘
+```
+
+**左侧列表**
+
+| 标签 | 内容 |
+| --- | --- |
+| **全部** | 本地 `source/_posts` 与 `source/_drafts` |
+| **已发布** | 服务器上的 `source/_posts`（需先配置并连接 SSH） |
+| **草稿** | 本地 `source/_drafts` |
+
+列表项可打开、重命名、删除。顶部搜索框按标题、文件名、路径过滤。
+
+**中间工作区**
+
+- 拖动编辑器和预览之间的竖条，可改左右宽度。
+- 未打开文章时，中间是引导页。
+- 远程文章标题前会标「远程 ·」，保存会直接写回服务器。
+
+### 3. 写一篇文章
+
+**新建**
+
+1. 选好左侧标签：在「全部 / 草稿」是写到本地；在「已发布」是直接在服务器 `source/_posts` 新建（必须已连接 SSH）。
+2. 点标题栏 **新建**，或 `Ctrl+N`。
+3. 填标题，选模板，本地还可选「已发布」或「草稿」。
+4. 文件名由标题生成（空格变 `-`，去掉非法字符），例如标题 `你好 世界` → `你好-世界.md`，路径类似 `source/_posts/你好-世界.md`。
+5. 点 **创建**。模板里的 `{{ title }}`、`{{ date }}`、`{{ slug }}` 会替换成当前标题、时间和文件名片段；`date` 会写成此刻时间。
+
+**编辑与保存**
+
+- 左边改源码，右边即时预览。
+- `Ctrl+S` 或点 **保存**。未保存时标题旁有圆点，状态栏显示「未保存」。切换文章或关闭窗口会提醒。
+- 工具栏可给选中文字加标题、粗体、斜体、行内代码、链接、引用、列表。
+- 编辑器支持 Tab 缩进。
+
+**重命名**
+
+Hexo 默认常用文件名当 permalink。点状态栏路径，或菜单 **文件 → 重命名文件…**，也可在列表里改。弹窗会预览新文件名和链接片段。同名资源目录（`文章名/`）会一起改。
+
+**删除**
+
+在列表里删除。本地文章删本地文件；「已发布」里删的是服务器上的文件。请确认后再删。
+
+**文章模板**
+
+在 **设置 → 文章模板**：
+
+- 可新建、改名、编辑、删除模板，并把其中一个设为默认。
+- 占位符：`{{ title }}`、`{{ date }}`、`{{ slug }}`。
+- 若博客目录有 `scaffolds/post.md`、`scaffolds/draft.md`，新建时也会出现在模板列表中（只读，改 Hexo 脚手架文件即可）。
+
+### 4. 图片
+
+三种插入方式效果相同：
+
+- 在编辑器里 **粘贴** 截图或图片
+- **拖入** 图片文件
+- 工具栏 **图片按钮** 选文件
+
+流程：先插入占位 `![文件名](uploading:…)`，成功后再换成最终地址。
+
+**已配置 R2**
+
+上传到 Cloudflare R2，插入公开 URL，形如：
+
+```markdown
+![封面.png](https://img.example.com/hexo/2026/08/20/xxxx-封面.png)
+```
+
+对象键默认前缀 `hexo`，可在设置里改。
+
+**未配置 R2**
+
+保存到当前文章旁边的资源目录，例如：
+
+- 文章：`source/_posts/hello.md`
+- 图片：`source/_posts/hello/paste-20260820-143000.png`
+
+Markdown 里写相对文件名。预览会按 Hexo 文章资源目录解析；远程文章则从服务器读图。
+
+独立成行的 `![说明](地址)` 会在预览里显示图片，并在下方用 alt（或 title）作为题注。
+
+### 5. 预览、大纲与大图
+
+- 预览支持 GFM、Mermaid 流程图，以及上面列出的 Hexo 标签。
+- 拖左边源码滚动时，右边预览会跟到对应段落。
+- **大纲**：`Ctrl+Shift+O` 或工具栏大纲按钮。点击标题会同时跳转预览和编辑器；预览滚动时会高亮当前标题。
+- **双击预览中的图片** 全屏查看。滚轮缩放，放大后可拖动；点空白、点「关闭」、再双击图片或按 `Esc` 退出。
+- 预览里的 `http(s)` 链接用系统浏览器打开，不会在应用内跳转。
+
+在预览中渲染流程图，使用 `mermaid` 或 `mmd` 代码块：
+
+````markdown
+```mermaid
+flowchart TD
+  写稿 --> 预览
+  预览 --> 保存
+  保存 --> 部署
+```
+````
+
+也支持 Hexo 标签 `{% mermaid %} ... {% endmermaid %}`。语法错误时预览会显示报错，源码仍可见。皮肤切换后流程图会按浅色 / 深色重绘。
+
+### 6. 外观、字体和字号
+
+在 **设置** 顶部，或菜单 **视图**：
+
+| 项目 | 选项 | 说明 |
+| --- | --- | --- |
+| 外观 | 墨色 / 宣纸 / 夜航 / 青瓷 | 点选即预览，保存后写入配置 |
+| 字体 | 默认、系统、黑体、宋体、楷体、等宽 | 作用于界面、编辑器和预览 |
+| 文字大小 | 12–20 px，标准 14 | 只放大文字，不缩放图片 |
+
+快捷键：`Ctrl+=` 增大，`Ctrl+-` 减小，`Ctrl+0` 重置。设置里点选可先预览，取消则还原；保存后才写入配置。
+
+### 7. 远程同步与发布
+
+适用于博客源码在服务器上、本机用这款编辑器改稿的情况。先完成 [SSH 配置](#配置-ssh--sftp)。
+
+**推荐流程**
+
+1. 点远程栏插头图标（或菜单 **远程 → 连接 SSH**）。连上后状态栏和远程栏会显示 `用户@主机`。
+2. **已发布**：左侧列表实时列出服务器 `source/_posts`。打开后直接改远程文件，**保存即写回服务器**，不必再点「推送当前」。
+3. **本地草稿 / 全部**：在本机 `source/_drafts` 或本地 posts 里写。可用「从服务器拉取」把远程文章下到本地；改完后「推送当前」或「推送全部」。
+4. 可选：设置里勾选 **保存文章后自动 SFTP 上传**（只对本地文章生效：保存后自动推送该 Markdown 和同名资源目录）。
+5. 推送完成后，用 **生成**、**部署** 或火箭按钮 **生成并部署**，在服务器博客目录执行 Hexo 命令。
+6. 点远程栏日志按钮查看输出；失败时先看这里。
+
+**远程栏按钮**
+
+| 按钮 | 作用 |
+| --- | --- |
+| 插头 | 连接 / 断开 SSH |
+| 下载 | 从服务器拉取 `source/_posts`、`source/_drafts` 及文章资源目录到本地 |
+| 上传 | 推送**当前**本地文章（远程文章请直接保存） |
+| 云朵 | 推送全部本地文章 |
+| 生成 | 远程 `npx hexo generate`（可在设置里改命令） |
+| 部署 | 远程 `npx hexo deploy` |
+| 火箭 | 先生成再部署 |
+| 日志 | 打开底部远程日志 |
+
+命令通过 `bash -lc` 执行，并会先跑「登录初始化」（默认尝试加载 nvm / `.bashrc`），以便找到 `node` 和 `hexo`。
+
+---
+
+## 配置 Cloudflare R2
+
+图片希望用 CDN 公开地址时再配。整组留空则走本地/远程文章资源目录。
+
+1. 在 Cloudflare 创建 R2 存储桶。
 2. 开启公开访问：绑定自定义域名，或使用 `r2.dev` 公开子域。
-3. 创建 **R2 API Token**（Object Read & Write），记下 Account ID、Access Key、Secret、Bucket、公开 URL（不要末尾斜杠）。
+3. 创建 **R2 API Token**（该桶 Object Read & Write），记下：
+   - Account ID（仪表盘右栏或 R2 概览）
+   - Access Key ID、Secret Access Key
+   - Bucket 名
+   - 公开访问 URL（不要末尾斜杠），例如 `https://img.example.com` 或 `https://pub-xxxx.r2.dev`
+4. 在应用 **设置 → Cloudflare R2** 填入。对象键前缀默认 `hexo`，实际上传路径类似 `hexo/2026/08/20/abc123-封面.png`。插入 Markdown 的链接为「公开 URL + 对象键」。
 
-## 远程 SSH / SFTP
+Access Key 不是 Cloudflare 登录邮箱。Secret 只显示一次；已经保存过的可留空，不会被清空。
 
-博客如果在服务器上，可在 **设置 → SSH / SFTP** 填写：
+---
 
-- 主机、端口、用户名
-- 密码，或私钥文件（可再填私钥口令）
-- 远程 Hexo 根目录，例如 `/home/ubuntu/blog`（必须是绝对路径）
-- 生成 / 部署命令，默认 `npx hexo generate` 与 `npx hexo deploy`
+## 配置 SSH / SFTP
 
-然后使用工具栏或菜单 **远程**：
+在 **设置 → SSH / SFTP** 填写：
 
-1. 连接 SSH
-2. **拉取**：把服务器上的文章下载到本地 Hexo 目录
-3. 本地编辑；可选「保存后自动上传」
-4. **推送当前 / 全部**：把 Markdown 和同名资源目录上传回服务器
-5. **生成 / 部署 / 生成并部署**：在服务器上 `cd` 到博客目录后执行命令
+| 项 | 说明 |
+| --- | --- |
+| 主机 / 端口 / 用户名 | 端口一般是 `22`。主机不要带 `ssh://` |
+| 密码 或 私钥 | 二选一，推荐私钥（OpenSSH 的 `id_ed25519` / `id_rsa`，不要选 `.pub`）。PuTTY `.ppk` 需先转换成 OpenSSH |
+| 私钥口令 | 创建密钥时设过 passphrase 再填 |
+| 远程 Hexo 根目录 | 服务器上的**绝对路径**，且含 `_config.yml`，例如 `/home/ubuntu/blog` |
+| 登录初始化 | 连上后、进博客目录前执行，用来加载 nvm / node。多条用 `;` 连接 |
+| 生成 / 部署命令 | 默认 `npx hexo generate`、`npx hexo deploy`。也可写成 `hexo g` 或 `npx hexo generate --deploy` |
 
-命令通过 `bash -lc` 运行，并会先执行「登录初始化」（默认尝试 `nvm` / `.bashrc`），以便找到 `node` 和 `hexo`。输出在底部远程日志里。
+用户需要对远程博客目录有读写权限。密码和私钥已保存时，再次打开设置留空表示不改。
 
-快捷键：`Ctrl/Cmd+Shift+U` 推送当前文章，`Ctrl/Cmd+Shift+D` 生成并部署。
+---
+
+## 快捷键
+
+| 操作 | Windows / Linux | macOS |
+| --- | --- | --- |
+| 新建文章 | `Ctrl+N` | `⌘N` |
+| 保存 | `Ctrl+S` | `⌘S` |
+| 设置 | `Ctrl+,` | `⌘,` |
+| 大纲 | `Ctrl+Shift+O` | `⌘⇧O` |
+| 增大文字 | `Ctrl+=` | `⌘=` |
+| 减小文字 | `Ctrl+-` | `⌘-` |
+| 重置文字大小 | `Ctrl+0` | `⌘0` |
+| 推送当前文章 | `Ctrl+Shift+U` | `⌘⇧U` |
+| 生成并部署 | `Ctrl+Shift+D` | `⌘⇧D` |
+| 撤销 / 重做 | `Ctrl+Z` / `Ctrl+Y` | `⌘Z` / `⌘⇧Z` |
+| 关闭大图预览 | `Esc` | `Esc` |
+
+---
+
+## 常见问题
+
+**设置里提示找不到 `_config.yml`**  
+路径应指向 Hexo 站点根（和 `_config.yml` 同级），不是 `source` 或 `_posts`。
+
+**「已发布」是空的，或提示未连接**  
+先在设置里填好 SSH 并保存，再点远程栏连接。已发布列表读的是**服务器**上的文章，不是本地 `_posts`。
+
+**保存了但网站没更新**  
+本地保存只改文件。要让站点变，需推到服务器（远程文章保存即写回），再执行生成 / 部署。看底部远程日志确认命令是否成功。
+
+**远程生成报找不到 hexo / node**  
+在「登录初始化」里 source 你的 nvm 或 bashrc，例如：
+
+```bash
+source ~/.nvm/nvm.sh 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true
+```
+
+**粘贴图片失败**  
+看提示。未配 R2 时会写到文章资源目录，需要已经打开一篇文章。配了 R2 则检查 Account ID、密钥、桶名和公开 URL。
+
+**预览里相对路径图片不显示**  
+确认图片在「文章名同名目录」下，Markdown 用文件名或 `./文件名`。远程文章需保持 SSH 连接。
+
+**想改文章链接**  
+改文件名（重命名），不要只改标题。本应用新建时文件名不含 `2026-08-20-` 这种日期前缀。
+
+**字变大了连图片一起变**  
+请用「视图 → 文字大小」，不要用系统级页面缩放。字号只影响文字。
+
+---
 
 ## 开发
 
@@ -52,17 +321,11 @@ npm install
 npm run dev
 ```
 
-会同时启动 Vite 和 Electron 窗口。在应用 **设置** 里填写本地 Hexo 根目录、R2 和 SSH。
+会同时启动 Vite 和 Electron。在应用设置里填写本地 Hexo 根目录、R2 和 SSH。
 
-配置保存在系统用户目录，不会进 git：
+---
 
-- Windows: `%APPDATA%\hexo-markdown\data\config.json`
-- macOS: `~/Library/Application Support/Hexo Markdown/data/config.json`
-- Linux: `~/.config/hexo-markdown/data/config.json`
-
-项目根目录的 `.env` 可作为初始默认值，见 `.env.example`。
-
-## 打包
+## 打包与 GitHub 自动编译
 
 ```bash
 # 当前系统安装包
@@ -74,29 +337,14 @@ npm run dist:mac
 npm run dist:linux
 ```
 
-产物在 `release/`：
+产物在 `release/`。跨平台打包通常要在对应系统上执行（例如在 macOS 上打 dmg）。
 
-- Windows: NSIS 安装包
-- macOS: DMG
-- Linux: AppImage
-
-跨平台打包通常要在对应系统上执行（例如在 macOS 上打 dmg）。GitHub Actions 会在每次推送 `main` 时自动编译三个平台，打 `v*` 标签时还会发布 Release。
-
-## GitHub 自动编译
-
-推送到 `main` 或提交 Pull Request 后，[Build](.github/workflows/build.yml) 会在 Windows / macOS / Linux 上分别打包。三个平台都成功后，安装包会上传到 [Releases](https://github.com/Songxwn/hexo-markdown/releases)：
+推送到 `main` 或提交 Pull Request 后，[Build](.github/workflows/build.yml) 会在 Windows / macOS / Linux 上分别打包：
 
 - 推送 `main`：更新预发布 **Latest build**
 - 推送 `v*` 标签：发布正式版本
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.2.6
+git push origin v1.2.6
 ```
-
-## 使用提示
-
-- Hexo 根目录需包含 `_config.yml` 与 `source/_posts`
-- 粘贴截图后会先插入占位图，上传成功再替换为 R2 URL
-- 预览里的相对路径图片按 Hexo 文章资源目录解析
-- 预览中的外链会用系统默认浏览器打开
