@@ -1,4 +1,4 @@
-import { Cloud, HardDrive, Server } from "lucide-react";
+import { Cloud, HardDrive, Server, Sparkles } from "lucide-react";
 import type { PostOrigin, SshStatus } from "../lib/types";
 
 type Props = {
@@ -8,12 +8,16 @@ type Props = {
   chars: number;
   dirty: boolean;
   r2Configured: boolean;
+  llmConfigured: boolean;
+  llmModel: string;
   ssh: SshStatus;
   uploadHint: string | null;
   version: string;
   onToggleLog: () => void;
   onRename: () => void;
   onAbout: () => void;
+  onToggleLlm: () => void;
+  onOpenSettings: () => void;
 };
 
 export function StatusBar({
@@ -23,12 +27,16 @@ export function StatusBar({
   chars,
   dirty,
   r2Configured,
+  llmConfigured,
+  llmModel,
   ssh,
   uploadHint,
   version,
   onToggleLog,
   onRename,
   onAbout,
+  onToggleLlm,
+  onOpenSettings,
 }: Props) {
   return (
     <footer className="statusbar">
@@ -50,6 +58,15 @@ export function StatusBar({
       <button type="button" className="status-link" onClick={onToggleLog} title="远程日志">
         <Server size={13} />
         {ssh.connected ? `${ssh.user}@${ssh.host}` : "SSH 未连接"}
+      </button>
+      <button
+        type="button"
+        className="status-link"
+        onClick={llmConfigured ? onToggleLlm : onOpenSettings}
+        title={llmConfigured ? (llmModel ? `LLM · ${llmModel}` : "LLM 协助") : "配置 LLM"}
+      >
+        <Sparkles size={13} />
+        {llmConfigured ? llmModel || "LLM 已配置" : "未配置 LLM"}
       </button>
       <span className="storage">
         {r2Configured ? <Cloud size={13} /> : <HardDrive size={13} />}

@@ -1,6 +1,7 @@
 import { FolderOpen, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { LLM_PRESETS } from "../lib/llm";
 import { applyTheme, DEFAULT_THEME, THEMES } from "../lib/theme";
 import {
   applyTypography,
@@ -47,6 +48,9 @@ const empty: Partial<AppSettings> = {
   theme: DEFAULT_THEME,
   fontFamily: DEFAULT_FONT_FAMILY,
   fontSize: DEFAULT_FONT_SIZE,
+  llmBaseUrl: "",
+  llmApiKey: "",
+  llmModel: "",
 };
 
 const defaultTemplateBody = `---
@@ -104,6 +108,9 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
         theme: settings.theme || DEFAULT_THEME,
         fontFamily: settings.fontFamily || DEFAULT_FONT_FAMILY,
         fontSize: settings.fontSize || DEFAULT_FONT_SIZE,
+        llmBaseUrl: settings.llmBaseUrl || "",
+        llmApiKey: settings.llmApiKey || "",
+        llmModel: settings.llmModel || "",
       });
       const next = cloneUserTemplates(templates);
       setTpl(next);
@@ -148,7 +155,7 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
         <header>
           <h2>设置</h2>
           <p>
-            配置只保存在本机。密钥仅用于 Cloudflare R2 和你填写的 SSH 服务器，不会上传到别处。标了必填的项需要先填好，对应功能才能用。
+            配置只保存在本机。密钥仅用于 Cloudflare R2、SSH 服务器和你填写的 LLM 接口，不会上传到别处。标了必填的项需要先填好，对应功能才能用。
           </p>
         </header>
 
@@ -326,6 +333,68 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             </label>
           </>
         ) : null}
+
+        <h3>LLM 协助</h3>
+        <p className="section-hint">
+          对接 OpenAI 兼容的 <code>/chat/completions</code> 接口，用于续写、润色、扩写等。点选预设会填入地址和默认模型，再补上自己的 Key。Ollama 等本地服务可以不填 Key。
+        </p>
+        <div className="llm-presets">
+          {LLM_PRESETS.map((preset) => {
+            const selected =
+              (form.llmBaseUrl || "").replace(/\/+$/, "") === preset.baseUrl &&
+              (form.llmModel || "") === preset.model;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={selected ? "on" : ""}
+                onClick={() => {
+                  set("llmBaseUrl", preset.baseUrl);
+                  set("llmModel", preset.model);
+                }}
+              >
+                {preset.name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="modal-grid">
+          <label className="span-2">
+            接口地址
+            <input
+              value={form.llmBaseUrl || ""}
+              onChange={(e) => set("llmBaseUrl", e.target.value)}
+              placeholder="https://api.openai.com/v1"
+              autoComplete="off"
+            />
+            <Hint>
+              填到 <code>/v1</code> 即可，应用会自动补上 <code>/chat/completions</code>。若已包含完整路径则原样使用。也支持 Azure OpenAI 的完整 completions URL。
+            </Hint>
+          </label>
+          <label>
+            模型名
+            <input
+              value={form.llmModel || ""}
+              onChange={(e) => set("llmModel", e.target.value)}
+              placeholder="gpt-4o-mini"
+              autoComplete="off"
+            />
+            <Hint>
+              与服务商控制台里的模型 ID 一致，例如 <code>deepseek-chat</code>、<code>qwen-plus</code>。
+            </Hint>
+          </label>
+          <label>
+            API Key
+            <input
+              type="password"
+              value={form.llmApiKey || ""}
+              onChange={(e) => set("llmApiKey", e.target.value)}
+              placeholder="留空则不修改已保存密钥"
+              autoComplete="new-password"
+            />
+            <Hint>本地 Ollama 可留空。已保存过的 Key 留空表示不修改，不会被清空。</Hint>
+          </label>
+        </div>
 
         <h3>Cloudflare R2</h3>
         <p className="section-hint">

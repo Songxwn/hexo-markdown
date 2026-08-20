@@ -52,8 +52,12 @@ export type AppSettings = {
   theme: ThemeId;
   fontFamily: FontFamilyId;
   fontSize: number;
+  llmBaseUrl: string;
+  llmApiKey: string;
+  llmModel: string;
   r2Configured: boolean;
   sshConfigured: boolean;
+  llmConfigured: boolean;
   hexoValid: boolean;
   hexoHasConfig: boolean;
 };
@@ -96,6 +100,7 @@ export type MenuAction =
   | "settings"
   | "about"
   | "outline"
+  | "llm"
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"

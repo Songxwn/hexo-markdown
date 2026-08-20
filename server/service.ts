@@ -24,6 +24,7 @@ import {
   sshWriteRemotePost,
 } from "./ssh";
 import { listTemplates, saveTemplates } from "./templates";
+import { isLlmConfigured } from "./llm";
 import { normalizeTheme } from "./theme";
 import { normalizeFontFamily, normalizeFontSize } from "./typography";
 import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "./types";
@@ -72,8 +73,12 @@ export function publicConfig() {
     theme: cfg.theme,
     fontFamily: cfg.fontFamily,
     fontSize: cfg.fontSize,
+    llmBaseUrl: cfg.llmBaseUrl,
+    llmApiKey: maskSecret(cfg.llmApiKey),
+    llmModel: cfg.llmModel,
     r2Configured: isR2Configured(cfg),
     sshConfigured: isSshConfigured(),
+    llmConfigured: isLlmConfigured(cfg),
     hexoValid: hexo.ok,
     hexoHasConfig: hexo.hasConfig,
   };
@@ -108,8 +113,11 @@ export function updateSettings(body: Partial<AppConfig> & Record<string, unknown
     "sshInitCmd",
     "sshGenerateCmd",
     "sshDeployCmd",
+    "llmBaseUrl",
+    "llmApiKey",
+    "llmModel",
   ];
-  const secretKeys = new Set<keyof AppConfig>(["r2SecretAccessKey", "sshPassword", "sshPassphrase"]);
+  const secretKeys = new Set<keyof AppConfig>(["r2SecretAccessKey", "sshPassword", "sshPassphrase", "llmApiKey"]);
   for (const key of stringKeys) {
     if (typeof body[key] !== "string") continue;
     if (secretKeys.has(key) && (body[key] === "" || String(body[key]).includes("••••"))) {

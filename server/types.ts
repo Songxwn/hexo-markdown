@@ -23,14 +23,22 @@ export type AppConfig = {
   theme: ThemeId;
   fontFamily: FontFamilyId;
   fontSize: number;
+  llmBaseUrl: string;
+  llmApiKey: string;
+  llmModel: string;
 };
 
-export type PublicConfig = Omit<AppConfig, "r2SecretAccessKey" | "sshPassword" | "sshPassphrase"> & {
+export type PublicConfig = Omit<
+  AppConfig,
+  "r2SecretAccessKey" | "sshPassword" | "sshPassphrase" | "llmApiKey"
+> & {
   r2SecretAccessKey: string;
   sshPassword: string;
   sshPassphrase: string;
+  llmApiKey: string;
   r2Configured: boolean;
   sshConfigured: boolean;
+  llmConfigured: boolean;
   hexoValid: boolean;
   hexoHasConfig: boolean;
 };

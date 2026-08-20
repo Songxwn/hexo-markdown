@@ -7,6 +7,7 @@ export type MenuAction =
   | "settings"
   | "about"
   | "outline"
+  | "llm"
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"
@@ -57,6 +58,31 @@ const api = {
   sshPull: () => ipcRenderer.invoke("ssh:pull"),
   sshPush: (rel?: string | null) => ipcRenderer.invoke("ssh:push", rel || null),
   sshExec: (kind: "generate" | "deploy" | "full") => ipcRenderer.invoke("ssh:exec", kind),
+  llmChat: (payload: {
+    id: number;
+    mode: string;
+    instruction?: string;
+    selection: string;
+    article: string;
+  }) => ipcRenderer.send("llm:chat", payload),
+  llmAbort: (id: number) => ipcRenderer.send("llm:abort", id),
+  onLlmChunk: (handler: (event: { id: number; text: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { id: number; text: string }) =>
+      handler(payload);
+    ipcRenderer.on("llm:chunk", listener);
+    return () => ipcRenderer.removeListener("llm:chunk", listener);
+  },
+  onLlmDone: (handler: (event: { id: number }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { id: number }) => handler(payload);
+    ipcRenderer.on("llm:done", listener);
+    return () => ipcRenderer.removeListener("llm:done", listener);
+  },
+  onLlmError: (handler: (event: { id: number; message: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { id: number; message: string }) =>
+      handler(payload);
+    ipcRenderer.on("llm:error", listener);
+    return () => ipcRenderer.removeListener("llm:error", listener);
+  },
   onMenu: (handler: (action: MenuAction) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, action: MenuAction) => handler(action);
     ipcRenderer.on("menu", listener);

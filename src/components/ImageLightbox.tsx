@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 type Props = {
   src: string;
@@ -18,6 +18,7 @@ function clamp(n: number, min: number, max: number) {
 export function ImageLightbox({ src, alt, caption, onClose }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const moved = useRef(false);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -46,6 +47,7 @@ export function ImageLightbox({ src, alt, caption, onClose }: Props) {
   }, [scale]);
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    moved.current = false;
     if (event.button !== 0 || scale <= 1) return;
     drag.current = { x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -54,6 +56,7 @@ export function ImageLightbox({ src, alt, caption, onClose }: Props) {
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const start = drag.current;
     if (!start) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) moved.current = true;
     setOffset({
       x: start.ox + event.clientX - start.x,
       y: start.oy + event.clientY - start.y,
@@ -62,6 +65,14 @@ export function ImageLightbox({ src, alt, caption, onClose }: Props) {
 
   function endDrag() {
     drag.current = null;
+  }
+
+  function onStageClick(event: ReactMouseEvent<HTMLDivElement>) {
+    if (moved.current) {
+      event.stopPropagation();
+      return;
+    }
+    onClose();
   }
 
   return (
@@ -73,8 +84,7 @@ export function ImageLightbox({ src, alt, caption, onClose }: Props) {
       <div
         ref={stageRef}
         className={`lightbox-stage${scale > 1 ? " is-zoom" : ""}`}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={onClose}
+        onClick={onStageClick}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -88,11 +98,9 @@ export function ImageLightbox({ src, alt, caption, onClose }: Props) {
         />
       </div>
       {caption ? (
-        <p className="lightbox-caption" onClick={(event) => event.stopPropagation()}>
-          {caption}
-        </p>
+        <p className="lightbox-caption">{caption}</p>
       ) : null}
-      <p className="lightbox-hint">滚轮缩放 · 拖动移动 · 双击或 Esc 关闭</p>
+      <p className="lightbox-hint">滚轮缩放 · 放大后可拖动 · 单击或 Esc 关闭</p>
     </div>
   );
 }

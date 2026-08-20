@@ -14,11 +14,13 @@ import {
   Quote,
   Save,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "./components/AboutModal";
 import { ActionFx, originFrom, type ActionFxKind, type ActionFxState } from "./components/ActionFx";
 import { EditorPane, type EditorHandle, type EditorScrollPos } from "./components/EditorPane";
+import { LlmPanel } from "./components/LlmPanel";
 import { NewPostModal } from "./components/NewPostModal";
 import { Outline } from "./components/Outline";
 import { Preview, type PreviewHandle } from "./components/Preview";
@@ -29,7 +31,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar, type SidebarTab } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { api } from "./lib/api";
-import { countWords, extractHeadings, imageFileName, parseTitle } from "./lib/markdown";
+import { countWords, extractHeadings, parseTitle } from "./lib/markdown";
 import { applyTheme, normalizeTheme } from "./lib/theme";
 import { applyTypography, normalizeFontFamily, normalizeFontSize } from "./lib/typography";
 import type { AppInfo, AppSettings, PostFolder, PostOrigin, PostSummary, SshLogEvent, SshStatus, TemplateSet } from "./lib/types";
@@ -41,6 +43,14 @@ function readOutlineOpen(): boolean {
     return window.localStorage.getItem("hexomd.outline") !== "0";
   } catch {
     return true;
+  }
+}
+
+function readLlmOpen(): boolean {
+  try {
+    return window.localStorage.getItem("hexomd.llm") === "1";
+  } catch {
+    return false;
   }
 }
 
@@ -76,6 +86,7 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [outlineOpen, setOutlineOpen] = useState(readOutlineOpen);
+  const [llmOpen, setLlmOpen] = useState(readLlmOpen);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [saveFlash, setSaveFlash] = useState(false);
   const [actionFx, setActionFx] = useState<ActionFxState | null>(null);
@@ -107,6 +118,18 @@ export default function App() {
       const next = !open;
       try {
         window.localStorage.setItem("hexomd.outline", next ? "1" : "0");
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleLlm = useCallback(() => {
+    setLlmOpen((open) => {
+      const next = !open;
+      try {
+        window.localStorage.setItem("hexomd.llm", next ? "1" : "0");
       } catch {
         /* ignore quota */
       }
@@ -401,13 +424,12 @@ export default function App() {
   const handlePasteImage = useCallback(
     async (file: File) => {
       const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      const name = imageFileName(file);
-      const placeholder = `![${name}](uploading:${id})`;
+      const placeholder = `![](uploading:${id})`;
       editorRef.current?.insertAtCursor(`${placeholder}\n`);
       setUploadHint(settings?.r2Configured ? "正在上传到 Cloudflare R2…" : "正在保存图片…");
       try {
         const result = await api.uploadImage(file, path, editingOrigin);
-        editorRef.current?.replaceText(placeholder, `![${name}](${result.url})`);
+        editorRef.current?.replaceText(placeholder, `![](${result.url})`);
         const hint =
           result.storage === "r2"
             ? "图片已上传到 R2"
@@ -508,6 +530,7 @@ export default function App() {
         if (action === "settings") setSettingsOpen(true);
         if (action === "about") setAboutOpen(true);
         if (action === "outline") toggleOutline();
+        if (action === "llm") toggleLlm();
         if (action === "ssh-connect") void runRemote("已连接 SSH", () => api.sshConnect());
         if (action === "ssh-disconnect") void runRemote("已断开 SSH", () => api.sshDisconnect());
         if (action === "ssh-pull") void runRemote("拉取完成", () => api.sshPull());
@@ -540,7 +563,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleOutline]);
+  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -670,6 +693,14 @@ export default function App() {
             >
               <ListTree size={15} />
             </button>
+            <button
+              className={llmOpen ? "on" : ""}
+              onClick={toggleLlm}
+              title="LLM 协助 Ctrl+Shift+L"
+              disabled={!path}
+            >
+              <Sparkles size={15} />
+            </button>
             <span className="toolbar-note">
               {editingOrigin === "remote"
                 ? "远程文章 · 保存即写回服务器"
@@ -731,6 +762,18 @@ export default function App() {
                   onPasteImage={handlePasteImage}
                   onScroll={syncPreviewToEditor}
                 />
+                {llmOpen ? (
+                  <LlmPanel
+                    configured={Boolean(settings?.llmConfigured)}
+                    model={settings?.llmModel || ""}
+                    article={content}
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    getSelection={() => editorRef.current?.getSelection() || { text: "", from: 0, to: 0 }}
+                    onInsert={(text) => editorRef.current?.insertAtCursor(text)}
+                    onReplaceSelection={(text) => editorRef.current?.replaceSelection(text)}
+                    onReplaceAll={(text) => editorRef.current?.setDocument(text)}
+                  />
+                ) : null}
               </div>
               <div className="divider" onMouseDown={startResize} />
               <div className="preview-stage">
@@ -772,7 +815,7 @@ export default function App() {
                   新建文章
                 </button>
                 <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
-                  配置 Hexo / SSH / R2
+                  配置 Hexo / SSH / R2 / LLM
                 </button>
               </div>
             </div>
@@ -788,6 +831,8 @@ export default function App() {
         chars={words.chars}
         dirty={dirty}
         r2Configured={Boolean(settings?.r2Configured)}
+        llmConfigured={Boolean(settings?.llmConfigured)}
+        llmModel={settings?.llmModel || ""}
         ssh={ssh}
         uploadHint={uploadHint}
         version={appInfo?.version || ""}
@@ -800,6 +845,8 @@ export default function App() {
           openRename(path, undefined, editingOrigin);
         }}
         onAbout={() => setAboutOpen(true)}
+        onToggleLlm={toggleLlm}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <SettingsModal

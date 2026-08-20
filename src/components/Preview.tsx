@@ -153,7 +153,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
     const article = articleRef.current;
     if (!article) return;
     for (const img of article.querySelectorAll("img")) {
-      if (!img.title) img.title = "双击查看大图";
+      if (!img.title) img.title = "单击查看大图";
     }
   }, [html]);
 
@@ -173,8 +173,14 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
         className="preview-article"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={(event) => {
-          if ((event.target as HTMLElement).closest("img")) {
+          const img = (event.target as HTMLElement).closest("img");
+          if (img) {
             event.preventDefault();
+            const src = img.currentSrc || img.src;
+            if (!src || src.includes("uploading:")) return;
+            const figure = img.closest("figure");
+            const caption = figure?.querySelector("figcaption")?.textContent?.trim() || img.alt || "";
+            setLightbox({ src, alt: img.alt || "", caption });
             return;
           }
           const anchor = (event.target as HTMLElement).closest("a");
@@ -183,16 +189,6 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
             event.preventDefault();
             void api.openExternal(anchor.href);
           }
-        }}
-        onDoubleClick={(event) => {
-          const img = (event.target as HTMLElement).closest("img");
-          if (!img) return;
-          const src = img.currentSrc || img.src;
-          if (!src || src.includes("uploading:")) return;
-          event.preventDefault();
-          const figure = img.closest("figure");
-          const caption = figure?.querySelector("figcaption")?.textContent?.trim() || img.alt || "";
-          setLightbox({ src, alt: img.alt || "", caption });
         }}
       />
       {lightbox ? (

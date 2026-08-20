@@ -1,6 +1,6 @@
 # Hexo Markdown
 
-跨平台 Hexo 博客编辑器：左边写 Markdown，右边实时预览；粘贴图片可上传到 **Cloudflare R2**；可通过 **SSH / SFTP** 同步文章，并在服务器上执行 `hexo generate` / `hexo deploy`。
+跨平台 Hexo 博客编辑器：左边写 Markdown，右边实时预览；粘贴图片可上传到 **Cloudflare R2**；可通过 **SSH / SFTP** 同步文章，并在服务器上执行 `hexo generate` / `hexo deploy`。可接入 **OpenAI 兼容的外部 LLM** 做续写、润色、扩写。
 
 支持 **Windows / macOS / Linux**。当前版本见 [Releases](https://github.com/Songxwn/hexo-markdown/releases)。
 
@@ -18,8 +18,10 @@
   - [预览、大纲与大图](#5-预览大纲与大图)
   - [外观、字体和字号](#6-外观字体和字号)
   - [远程同步与发布](#7-远程同步与发布)
+  - [LLM 协助编辑](#8-llm-协助编辑)
 - [配置 Cloudflare R2](#配置-cloudflare-r2)
 - [配置 SSH / SFTP](#配置-ssh--sftp)
+- [配置 LLM](#配置-llm)
 - [快捷键](#快捷键)
 - [常见问题](#常见问题)
 - [开发](#开发)
@@ -33,7 +35,8 @@
 - 识别常见 Hexo 标签：`asset_img`、`img`、`blockquote`、`codeblock`、`raw`
 - 新建文章套用模板；文件名只用标题，**不加日期前缀**（日期写在 front-matter）
 - 粘贴 / 拖入 / 工具栏选图：有 R2 则上传并插入公开 URL；没有则存到文章资源目录
-- 预览同步滚动、标题大纲、双击图片放大、Mermaid 流程图
+- 预览同步滚动、标题大纲、单击图片放大、Mermaid 流程图
+- **LLM 协助编辑**：续写 / 润色 / 扩写 / 缩写 / 翻译，可接 OpenAI、DeepSeek、通义、Kimi、Ollama 等
 - 四种皮肤、六种字体、12–20px 字号
 - **已发布**列表走远程 SFTP，打开即可改服务器上的文章
 - SSH 远程执行生成 / 部署，底部有日志
@@ -79,10 +82,10 @@
 
 ```
 ┌ 标题栏：博客路径 · 当前文章 · 新建 / 保存 / 设置 ─────────────┐
-│ 侧栏          │ 工具栏（标题/粗体/图片/大纲）                    │
+│ 侧栏          │ 工具栏（标题/粗体/图片/大纲/LLM）                 │
 │ 全部/已发布/草稿│ 远程栏（连接、拉取、推送、生成、部署、日志）     │
-│ 搜索 + 列表    │ 左：源码编辑          │ 右：预览  │ 大纲（可选）│
-└ 状态栏：保存状态 · 路径 · 字数 · R2/SSH · 版本 ─────────────────┘
+│ 搜索 + 列表    │ 左：源码编辑 │ LLM（可选）│ 右：预览  │ 大纲（可选）│
+└ 状态栏：保存状态 · 路径 · 字数 · SSH / LLM / R2 · 版本 ──────────┘
 ```
 
 **左侧列表**
@@ -142,14 +145,14 @@ Hexo 默认常用文件名当 permalink。点状态栏路径，或菜单 **文�
 - **拖入** 图片文件
 - 工具栏 **图片按钮** 选文件
 
-流程：先插入占位 `![文件名](uploading:…)`，成功后再换成最终地址。
+流程：先插入占位 `![](uploading:…)`，成功后再换成最终地址。图片说明默认为空，需要时再自己在 `![]()` 的方括号里填写。
 
 **已配置 R2**
 
 上传到 Cloudflare R2，插入公开 URL，形如：
 
 ```markdown
-![封面.png](https://img.example.com/hexo/2026/08/20/xxxx-封面.png)
+![](https://img.example.com/hexo/2026/08/20/xxxx-封面.png)
 ```
 
 对象键默认前缀 `hexo`，可在设置里改。
@@ -170,7 +173,7 @@ Markdown 里写相对文件名。预览会按 Hexo 文章资源目录解析；�
 - 预览支持 GFM、Mermaid 流程图，以及上面列出的 Hexo 标签。
 - 拖左边源码滚动时，右边预览会跟到对应段落。
 - **大纲**：`Ctrl+Shift+O` 或工具栏大纲按钮。点击标题会同时跳转预览和编辑器；预览滚动时会高亮当前标题。
-- **双击预览中的图片** 全屏查看。滚轮缩放，放大后可拖动；点空白、点「关闭」、再双击图片或按 `Esc` 退出。
+- **单击预览中的图片** 全屏查看。再单击图片或空白处关闭；也可点「关闭」或按 `Esc`。滚轮缩放，放大后可拖动（拖动不会关掉）。
 - 预览里的 `http(s)` 链接用系统浏览器打开，不会在应用内跳转。
 
 在预览中渲染流程图，使用 `mermaid` 或 `mmd` 代码块：
@@ -226,6 +229,21 @@ flowchart TD
 
 命令通过 `bash -lc` 执行，并会先跑「登录初始化」（默认尝试加载 nvm / `.bashrc`），以便找到 `node` 和 `hexo`。
 
+### 8. LLM 协助编辑
+
+先完成 [LLM 配置](#配置-llm)。打开一篇文章后：
+
+1. 点工具栏星星按钮，或菜单 **视图 → LLM 协助**（`Ctrl+Shift+L`）。面板出现在源码编辑器右侧。
+2. 可选中一段文字再操作；没有选区则按**全文**处理。
+3. 点 **续写 / 润色 / 扩写 / 缩写 / 译中 / 译英**，或填写自定义指令后点 **按指令生成**。自定义框也可当作补充要求，和快捷按钮一起用。
+4. 生成过程中可 **停止**。完成后选择：
+   - **插入光标**：写到当前光标处
+   - **替换选区**：换成当前选中的文字（无选区则等于插入）
+   - **替换全文**：用结果覆盖整篇
+5. 结果是 Markdown，会尽量去掉模型包一层的代码围栏。请再通读一遍再保存。
+
+请求走应用主进程，避免浏览器跨域，API Key 也不会出现在页面网络面板里。
+
 ---
 
 ## 配置 Cloudflare R2
@@ -262,6 +280,31 @@ Access Key 不是 Cloudflare 登录邮箱。Secret 只显示一次；已经保�
 
 ---
 
+## 配置 LLM
+
+在 **设置 → LLM 协助** 填写 OpenAI 兼容接口。点选预设会填入地址和默认模型：
+
+| 预设 | 接口地址 | 默认模型 |
+| --- | --- | --- |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
+| Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-auto` |
+| 智谱 | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` |
+| Ollama | `http://127.0.0.1:11434/v1` | `qwen2.5` |
+
+地址填到 `/v1`（或服务商给出的 compatible 根路径）即可，应用会补上 `/chat/completions`。若你粘贴的已经是完整 completions URL，则原样使用。
+
+- **模型名**必须和服务商控制台一致。
+- **API Key**：云服务必填；本地 Ollama 可留空。已保存过的 Key 再次打开设置留空表示不修改。
+- 也可用其它兼容网关（One API、New API、Azure OpenAI 完整 URL 等），只要走 `chat/completions`。
+
+配置保存在本机用户数据目录，不会上传。
+
+---
+
 ## 快捷键
 
 | 操作 | Windows / Linux | macOS |
@@ -270,6 +313,7 @@ Access Key 不是 Cloudflare 登录邮箱。Secret 只显示一次；已经保�
 | 保存 | `Ctrl+S` | `⌘S` |
 | 设置 | `Ctrl+,` | `⌘,` |
 | 大纲 | `Ctrl+Shift+O` | `⌘⇧O` |
+| LLM 协助 | `Ctrl+Shift+L` | `⌘⇧L` |
 | 增大文字 | `Ctrl+=` | `⌘=` |
 | 减小文字 | `Ctrl+-` | `⌘-` |
 | 重置文字大小 | `Ctrl+0` | `⌘0` |
@@ -310,6 +354,9 @@ source ~/.nvm/nvm.sh 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true
 **字变大了连图片一起变**  
 请用「视图 → 文字大小」，不要用系统级页面缩放。字号只影响文字。
 
+**LLM 请求失败**  
+确认接口地址是 OpenAI 兼容的 `/v1` 或完整 `.../chat/completions`，模型名与控制台一致，Key 有效。Ollama 需先在本机 `ollama serve` 并拉好模型，Key 可留空。公司网关若禁止流式输出，应用会在报错信息含 stream 时自动改成非流式重试。
+
 ---
 
 ## 开发
@@ -321,7 +368,7 @@ npm install
 npm run dev
 ```
 
-会同时启动 Vite 和 Electron。在应用设置里填写本地 Hexo 根目录、R2 和 SSH。
+会同时启动 Vite 和 Electron。在应用设置里填写本地 Hexo 根目录、R2、SSH 和 LLM。
 
 ---
 

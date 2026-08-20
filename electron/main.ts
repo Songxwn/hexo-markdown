@@ -13,6 +13,7 @@ import {
   protocol,
   shell,
   type MenuItemConstructorOptions,
+  type WebContents,
 } from "electron";
 import { initConfig, loadConfig } from "../server/config";
 import { DEFAULT_THEME, THEME_CHROME, THEME_IDS, THEME_LABELS, normalizeTheme, type ThemeId } from "../server/theme";
@@ -52,6 +53,7 @@ import {
   sshPush,
   sshStatus,
 } from "../server/ssh";
+import { streamLlmChat } from "../server/llm";
 import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "../server/types";
 
 protocol.registerSchemesAsPrivileged([
@@ -158,6 +160,70 @@ function handle(channel: string, fn: (...args: unknown[]) => unknown) {
   });
 }
 
+const llmJobs = new Map<number, AbortController>();
+
+function abortLlm(id?: number): void {
+  if (id == null || Number.isNaN(id)) {
+    for (const ac of llmJobs.values()) ac.abort();
+    llmJobs.clear();
+    return;
+  }
+  llmJobs.get(id)?.abort();
+  llmJobs.delete(id);
+}
+
+async function runLlmChat(sender: WebContents, payload: unknown): Promise<void> {
+  const data = (payload || {}) as {
+    id?: number;
+    mode?: string;
+    instruction?: string;
+    selection?: string;
+    article?: string;
+  };
+  const id = Number(data.id);
+  if (!Number.isFinite(id)) return;
+  abortLlm(id);
+  const ac = new AbortController();
+  llmJobs.set(id, ac);
+  const send = (channel: string, body: unknown) => {
+    if (!sender.isDestroyed()) sender.send(channel, body);
+  };
+  try {
+    let got = false;
+    for await (const chunk of streamLlmChat(
+      {
+        mode: data.mode,
+        instruction: data.instruction,
+        selection: data.selection,
+        article: data.article,
+      },
+      ac.signal,
+    )) {
+      if (ac.signal.aborted) return;
+      if (sender.isDestroyed()) {
+        ac.abort();
+        return;
+      }
+      got = true;
+      send("llm:chunk", { id, text: chunk });
+    }
+    if (ac.signal.aborted) return;
+    if (!got) throw new Error("LLM 没有返回内容");
+    send("llm:done", { id });
+  } catch (error) {
+    const aborted =
+      ac.signal.aborted ||
+      (error instanceof Error && (error.name === "AbortError" || /aborted/i.test(error.message)));
+    if (aborted) return;
+    send("llm:error", {
+      id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    if (llmJobs.get(id) === ac) llmJobs.delete(id);
+  }
+}
+
 function createMenu(): void {
   const fileExtra: MenuItemConstructorOptions[] = isMac
     ? []
@@ -220,6 +286,7 @@ function createMenu(): void {
         { role: "togglefullscreen", label: "全屏" },
         { type: "separator" },
         { label: "大纲", accelerator: "CmdOrCtrl+Shift+O", click: () => sendMenu("outline") },
+        { label: "LLM 协助", accelerator: "CmdOrCtrl+Shift+L", click: () => sendMenu("llm") },
         { type: "separator" },
         {
           label: "外观",
@@ -423,6 +490,12 @@ function registerIpc(): void {
     }
     return sshExec(kind);
   });
+  ipcMain.on("llm:chat", (event, payload) => {
+    void runLlmChat(event.sender, payload);
+  });
+  ipcMain.on("llm:abort", (_event, id) => {
+    abortLlm(Number(id));
+  });
   ipcMain.on("window:dirty", (_event, value: boolean) => {
     dirty = Boolean(value);
   });
@@ -582,6 +655,7 @@ if (!gotLock) {
 
 app.on("before-quit", () => {
   quitting = true;
+  abortLlm();
   void sshDisconnect();
 });
 

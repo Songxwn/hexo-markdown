@@ -11,6 +11,7 @@ import type {
   TemplateSet,
   UploadResult,
 } from "./types";
+import { imageFileName } from "./markdown";
 
 function desktop() {
   if (!window.hexo) {
@@ -76,7 +77,7 @@ export const api = {
   async uploadImage(file: File, postPath: string | null, origin: PostOrigin = "local"): Promise<UploadResult> {
     const data = await file.arrayBuffer();
     return desktop().uploadImage({
-      name: file.name,
+      name: imageFileName(file),
       type: file.type,
       data,
       postPath,
@@ -126,6 +127,40 @@ export const api = {
 
   sshExec(kind: "generate" | "deploy" | "full"): Promise<{ code: number }> {
     return desktop().sshExec(kind);
+  },
+
+  llmChat(
+    payload: { id: number; mode: string; instruction?: string; selection: string; article: string },
+    handlers: {
+      onChunk: (text: string) => void;
+      onDone: () => void;
+      onError: (message: string) => void;
+    },
+  ): () => void {
+    const d = desktop();
+    const offChunk = d.onLlmChunk((event) => {
+      if (event.id === payload.id) handlers.onChunk(event.text);
+    });
+    const offDone = d.onLlmDone((event) => {
+      if (event.id !== payload.id) return;
+      cleanup();
+      handlers.onDone();
+    });
+    const offError = d.onLlmError((event) => {
+      if (event.id !== payload.id) return;
+      cleanup();
+      handlers.onError(event.message);
+    });
+    function cleanup() {
+      offChunk();
+      offDone();
+      offError();
+    }
+    d.llmChat(payload);
+    return () => {
+      d.llmAbort(payload.id);
+      cleanup();
+    };
   },
 
   onMenu(handler: (action: MenuAction) => void): () => void {

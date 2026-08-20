@@ -51,6 +51,17 @@ type HexoDesktopAPI = {
   sshPull: () => Promise<SyncResult>;
   sshPush: (rel?: string | null) => Promise<SyncResult>;
   sshExec: (kind: "generate" | "deploy" | "full") => Promise<{ code: number }>;
+  llmChat: (payload: {
+    id: number;
+    mode: string;
+    instruction?: string;
+    selection: string;
+    article: string;
+  }) => void;
+  llmAbort: (id: number) => void;
+  onLlmChunk: (handler: (event: { id: number; text: string }) => void) => () => void;
+  onLlmDone: (handler: (event: { id: number }) => void) => () => void;
+  onLlmError: (handler: (event: { id: number; message: string }) => void) => () => void;
   onMenu: (handler: (action: MenuAction) => void) => () => void;
   onTheme: (handler: (theme: string) => void) => () => void;
   onTypography: (handler: (value: { fontFamily: string; fontSize: number }) => void) => () => void;

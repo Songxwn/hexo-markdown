@@ -18,6 +18,9 @@ export type EditorHandle = {
   wrapSelection: (before: string, after?: string) => void;
   insertAtCursor: (text: string) => void;
   replaceText: (from: string, to: string) => boolean;
+  getSelection: () => { text: string; from: number; to: number };
+  replaceSelection: (text: string) => void;
+  setDocument: (text: string) => void;
   gotoLine: (line: number) => void;
   focus: () => void;
 };
@@ -126,6 +129,30 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
         changes: { from: index, to: index + from.length, insert: to },
       });
       return true;
+    },
+    getSelection() {
+      const view = viewRef.current;
+      if (!view) return { text: "", from: 0, to: 0 };
+      const sel = view.state.selection.main;
+      return { text: view.state.sliceDoc(sel.from, sel.to), from: sel.from, to: sel.to };
+    },
+    replaceSelection(text) {
+      const view = viewRef.current;
+      if (!view) return;
+      const sel = view.state.selection.main;
+      view.dispatch({
+        changes: { from: sel.from, to: sel.to, insert: text },
+        selection: { anchor: sel.from + text.length },
+      });
+      view.focus();
+    },
+    setDocument(text) {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+      });
+      view.focus();
     },
     gotoLine(line) {
       const view = viewRef.current;

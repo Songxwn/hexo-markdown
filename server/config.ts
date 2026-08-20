@@ -67,6 +67,9 @@ export function defaultConfig(): AppConfig {
     theme: normalizeTheme(process.env.THEME || DEFAULT_THEME),
     fontFamily: normalizeFontFamily(process.env.FONT_FAMILY || DEFAULT_FONT_FAMILY),
     fontSize: normalizeFontSize(process.env.FONT_SIZE || DEFAULT_FONT_SIZE),
+    llmBaseUrl: (process.env.LLM_BASE_URL || "").replace(/\/+$/, ""),
+    llmApiKey: process.env.LLM_API_KEY?.trim() || "",
+    llmModel: process.env.LLM_MODEL?.trim() || "",
   };
 }
 
@@ -89,6 +92,9 @@ function normalize(cfg: AppConfig): AppConfig {
   cfg.theme = normalizeTheme(cfg.theme);
   cfg.fontFamily = normalizeFontFamily(cfg.fontFamily);
   cfg.fontSize = normalizeFontSize(cfg.fontSize);
+  cfg.llmBaseUrl = (cfg.llmBaseUrl || "").trim().replace(/\/+$/, "");
+  cfg.llmApiKey = cfg.llmApiKey || "";
+  cfg.llmModel = (cfg.llmModel || "").trim();
   return cfg;
 }
 
