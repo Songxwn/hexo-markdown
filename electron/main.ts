@@ -15,16 +15,21 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { initConfig, loadConfig } from "../server/config";
+import { DEFAULT_THEME, THEME_CHROME, THEME_IDS, THEME_LABELS, normalizeTheme, type ThemeId } from "../server/theme";
 import {
   getPost,
   getPosts,
+  getRemotePosts,
+  getTemplates,
   mediaAbsolutePath,
   newPost,
   publicConfig,
   putPost,
+  remoteMediaBytes,
   removePost,
   renamePost,
   updateSettings,
+  updateTemplates,
   uploadImage,
 } from "../server/service";
 import {
@@ -36,7 +41,7 @@ import {
   sshPush,
   sshStatus,
 } from "../server/ssh";
-import type { AppConfig, PostFolder } from "../server/types";
+import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "../server/types";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -69,6 +74,39 @@ function resolveAppIcon(): string | undefined {
 let mainWindow: BrowserWindow | null = null;
 let dirty = false;
 let quitting = false;
+
+function currentTheme(): ThemeId {
+  try {
+    return normalizeTheme(loadConfig().theme);
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function applyWindowChrome(theme: ThemeId): void {
+  const chrome = THEME_CHROME[theme] || THEME_CHROME[DEFAULT_THEME];
+  if (!mainWindow) return;
+  mainWindow.setBackgroundColor(chrome.bg);
+  if (isWin) {
+    try {
+      mainWindow.setTitleBarOverlay({
+        color: chrome.overlay,
+        symbolColor: chrome.symbol,
+        height: 56,
+      });
+    } catch {
+      /* overlay may be unavailable */
+    }
+  }
+}
+
+function persistTheme(theme: ThemeId): void {
+  const id = normalizeTheme(theme);
+  updateSettings({ theme: id });
+  applyWindowChrome(id);
+  mainWindow?.webContents.send("theme", id);
+  createMenu();
+}
 
 function sendMenu(action: string) {
   mainWindow?.webContents.send("menu", action);
@@ -148,6 +186,16 @@ function createMenu(): void {
         { role: "zoomOut", label: "缩小" },
         { type: "separator" },
         { role: "togglefullscreen", label: "全屏" },
+        { type: "separator" },
+        {
+          label: "外观",
+          submenu: THEME_IDS.map((id) => ({
+            label: THEME_LABELS[id],
+            type: "radio" as const,
+            checked: currentTheme() === id,
+            click: () => persistTheme(id),
+          })),
+        },
       ],
     },
     {
@@ -193,24 +241,51 @@ function registerIpc(): void {
     chrome: process.versions.chrome,
   }));
   handle("settings:get", () => publicConfig());
-  handle("settings:save", (body) => updateSettings((body || {}) as Partial<AppConfig>));
+  handle("settings:save", (body) => {
+    const next = updateSettings((body || {}) as Partial<AppConfig>);
+    applyWindowChrome(normalizeTheme(next.theme));
+    createMenu();
+    return next;
+  });
+  handle("templates:get", () => getTemplates());
+  handle("templates:save", (body) => updateTemplates((body || {}) as Partial<TemplateSet>));
   handle("posts:list", () => getPosts());
-  handle("posts:read", (path) => getPost(String(path || "")));
+  handle("posts:remote-list", () => getRemotePosts());
+  handle("posts:read", (payload) => {
+    if (typeof payload === "string") return getPost(payload);
+    const data = payload as { path?: string; origin?: PostOrigin };
+    return getPost(data?.path || "", data?.origin);
+  });
   handle("posts:write", (payload) => {
-    const data = payload as { path?: string; content?: string };
-    return putPost(data?.path || "", data?.content ?? "");
+    const data = payload as { path?: string; content?: string; origin?: PostOrigin };
+    return putPost(data?.path || "", data?.content ?? "", data?.origin);
   });
   handle("posts:create", (payload) => {
-    const data = payload as { title?: string; folder?: PostFolder };
-    return newPost(data?.title || "未命名", data?.folder === "drafts" ? "drafts" : "posts");
+    const data = payload as {
+      title?: string;
+      folder?: PostFolder;
+      templateId?: string | null;
+      origin?: PostOrigin;
+    };
+    return newPost(
+      data?.title || "未命名",
+      data?.folder === "drafts" ? "drafts" : "posts",
+      data?.templateId,
+      data?.origin,
+    );
   });
-  handle("posts:delete", (path) => {
-    removePost(String(path || ""));
+  handle("posts:delete", (payload) => {
+    if (typeof payload === "string") {
+      removePost(payload);
+      return { ok: true };
+    }
+    const data = payload as { path?: string; origin?: PostOrigin };
+    removePost(data?.path || "", data?.origin);
     return { ok: true };
   });
   handle("posts:rename", (payload) => {
-    const data = payload as { path?: string; name?: string };
-    return renamePost(data?.path || "", data?.name || "");
+    const data = payload as { path?: string; name?: string; origin?: PostOrigin };
+    return renamePost(data?.path || "", data?.name || "", data?.origin);
   });
   handle("images:upload", async (payload) => {
     const data = payload as {
@@ -218,6 +293,7 @@ function registerIpc(): void {
       type?: string;
       data?: ArrayBuffer;
       postPath?: string | null;
+      origin?: PostOrigin;
     };
     if (!data?.data) throw new Error("没有文件");
     return uploadImage(
@@ -227,6 +303,7 @@ function registerIpc(): void {
         buffer: Buffer.from(data.data),
       },
       data.postPath ?? null,
+      data.origin,
     );
   });
   handle("dialog:directory", async () => {
@@ -235,6 +312,7 @@ function registerIpc(): void {
     const result = await dialog.showOpenDialog(win, {
       title: "选择 Hexo 博客根目录",
       properties: ["openDirectory"],
+      defaultPath: loadConfig().hexoRoot || app.getPath("home"),
     });
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
@@ -250,6 +328,7 @@ function registerIpc(): void {
     const result = await dialog.showOpenDialog(win, {
       title: "选择 SSH 私钥",
       properties: ["openFile"],
+      defaultPath: loadConfig().sshPrivateKeyPath || join(app.getPath("home"), ".ssh"),
     });
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
@@ -270,6 +349,9 @@ function registerIpc(): void {
   ipcMain.on("window:dirty", (_event, value: boolean) => {
     dirty = Boolean(value);
   });
+  ipcMain.on("window:theme", (_event, theme: unknown) => {
+    applyWindowChrome(normalizeTheme(theme));
+  });
 }
 
 function registerProtocol(): void {
@@ -281,6 +363,10 @@ function registerProtocol(): void {
         .split("/")
         .map((part) => decodeURIComponent(part))
         .join("/");
+      if (url.hostname === "remote") {
+        const bytes = await remoteMediaBytes(rel);
+        return new Response(Uint8Array.from(bytes));
+      }
       const abs = mediaAbsolutePath(rel);
       if (!existsSync(abs)) {
         return new Response("Not found", { status: 404 });
@@ -293,6 +379,8 @@ function registerProtocol(): void {
 }
 
 async function createWindow(): Promise<void> {
+  const theme = currentTheme();
+  const chrome = THEME_CHROME[theme];
   mainWindow = new BrowserWindow({
     title: "Hexo Markdown",
     width: 1440,
@@ -300,7 +388,7 @@ async function createWindow(): Promise<void> {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    backgroundColor: "#0f0e0c",
+    backgroundColor: chrome.bg,
     icon: resolveAppIcon(),
     ...(isMac
       ? {
@@ -311,8 +399,8 @@ async function createWindow(): Promise<void> {
         ? {
             titleBarStyle: "hidden" as const,
             titleBarOverlay: {
-              color: "#171512",
-              symbolColor: "#ece6d8",
+              color: chrome.overlay,
+              symbolColor: chrome.symbol,
               height: 56,
             },
           }

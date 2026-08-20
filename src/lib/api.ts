@@ -3,10 +3,12 @@ import type {
   AppSettings,
   MenuAction,
   PostFolder,
+  PostOrigin,
   PostSummary,
   SshLogEvent,
   SshStatus,
   SyncResult,
+  TemplateSet,
   UploadResult,
 } from "./types";
 
@@ -34,33 +36,51 @@ export const api = {
     return desktop().posts();
   },
 
-  readPost(path: string): Promise<{ path: string; content: string }> {
-    return desktop().readPost(path);
+  remotePosts(): Promise<PostSummary[]> {
+    return desktop().remotePosts();
   },
 
-  savePost(path: string, content: string): Promise<{ path: string }> {
-    return desktop().savePost(path, content);
+  readPost(path: string, origin: PostOrigin = "local"): Promise<{ path: string; content: string }> {
+    return desktop().readPost(path, origin);
   },
 
-  createPost(title: string, folder: PostFolder): Promise<{ path: string; content: string }> {
-    return desktop().createPost(title, folder);
+  savePost(path: string, content: string, origin: PostOrigin = "local"): Promise<{ path: string }> {
+    return desktop().savePost(path, content, origin);
   },
 
-  deletePost(path: string): Promise<void> {
-    return desktop().deletePost(path);
+  createPost(
+    title: string,
+    folder: PostFolder,
+    templateId?: string | null,
+    origin: PostOrigin = "local",
+  ): Promise<{ path: string; content: string }> {
+    return desktop().createPost(title, folder, templateId, origin);
   },
 
-  renamePost(path: string, name: string): Promise<{ path: string }> {
-    return desktop().renamePost(path, name);
+  templates(): Promise<TemplateSet> {
+    return desktop().templates();
   },
 
-  async uploadImage(file: File, postPath: string | null): Promise<UploadResult> {
+  saveTemplates(body: Partial<TemplateSet>): Promise<TemplateSet> {
+    return desktop().saveTemplates(body);
+  },
+
+  deletePost(path: string, origin: PostOrigin = "local"): Promise<void> {
+    return desktop().deletePost(path, origin);
+  },
+
+  renamePost(path: string, name: string, origin: PostOrigin = "local"): Promise<{ path: string }> {
+    return desktop().renamePost(path, name, origin);
+  },
+
+  async uploadImage(file: File, postPath: string | null, origin: PostOrigin = "local"): Promise<UploadResult> {
     const data = await file.arrayBuffer();
     return desktop().uploadImage({
       name: file.name,
       type: file.type,
       data,
       postPath,
+      origin,
     });
   },
 
@@ -78,6 +98,10 @@ export const api = {
 
   setDirty(dirty: boolean): void {
     desktop().setDirty(dirty);
+  },
+
+  setTheme(theme: string): void {
+    desktop().setTheme(theme);
   },
 
   sshConnect(): Promise<{ host: string; user: string }> {
@@ -106,6 +130,10 @@ export const api = {
 
   onMenu(handler: (action: MenuAction) => void): () => void {
     return desktop().onMenu(handler);
+  },
+
+  onTheme(handler: (theme: string) => void): () => void {
+    return desktop().onTheme(handler);
   },
 
   onSshLog(handler: (event: SshLogEvent) => void): () => void {

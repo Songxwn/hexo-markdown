@@ -1,8 +1,9 @@
 import { Cloud, HardDrive, Server } from "lucide-react";
-import type { SshStatus } from "../lib/types";
+import type { PostOrigin, SshStatus } from "../lib/types";
 
 type Props = {
   path: string | null;
+  origin?: PostOrigin;
   words: number;
   chars: number;
   dirty: boolean;
@@ -17,6 +18,7 @@ type Props = {
 
 export function StatusBar({
   path,
+  origin = "local",
   words,
   chars,
   dirty,
@@ -38,7 +40,7 @@ export function StatusBar({
         onClick={onRename}
         title={path ? "修改文件名（文章链接）" : "未打开文章"}
       >
-        {path || "未打开文章"}
+        {path ? `${origin === "remote" ? "远程 · " : ""}${path}` : "未打开文章"}
       </button>
       <span className="spacer" />
       {uploadHint && <span className="hint">{uploadHint}</span>}

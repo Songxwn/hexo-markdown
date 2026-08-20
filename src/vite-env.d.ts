@@ -5,10 +5,12 @@ import type {
   AppSettings,
   MenuAction,
   PostFolder,
+  PostOrigin,
   PostSummary,
   SshLogEvent,
   SshStatus,
   SyncResult,
+  TemplateSet,
   UploadResult,
 } from "./lib/types";
 
@@ -18,21 +20,31 @@ type HexoDesktopAPI = {
   settings: () => Promise<AppSettings>;
   saveSettings: (body: Partial<AppSettings>) => Promise<AppSettings>;
   posts: () => Promise<PostSummary[]>;
-  readPost: (path: string) => Promise<{ path: string; content: string }>;
-  savePost: (path: string, content: string) => Promise<{ path: string }>;
-  createPost: (title: string, folder: PostFolder) => Promise<{ path: string; content: string }>;
-  deletePost: (path: string) => Promise<void>;
-  renamePost: (path: string, name: string) => Promise<{ path: string }>;
+  remotePosts: () => Promise<PostSummary[]>;
+  readPost: (path: string, origin?: PostOrigin) => Promise<{ path: string; content: string }>;
+  savePost: (path: string, content: string, origin?: PostOrigin) => Promise<{ path: string }>;
+  createPost: (
+    title: string,
+    folder: PostFolder,
+    templateId?: string | null,
+    origin?: PostOrigin,
+  ) => Promise<{ path: string; content: string }>;
+  templates: () => Promise<TemplateSet>;
+  saveTemplates: (body: Partial<TemplateSet>) => Promise<TemplateSet>;
+  deletePost: (path: string, origin?: PostOrigin) => Promise<void>;
+  renamePost: (path: string, name: string, origin?: PostOrigin) => Promise<{ path: string }>;
   uploadImage: (payload: {
     name: string;
     type: string;
     data: ArrayBuffer;
     postPath: string | null;
+    origin?: PostOrigin;
   }) => Promise<UploadResult>;
   pickDirectory: () => Promise<string | null>;
   pickFile: () => Promise<string | null>;
   openExternal: (url: string) => Promise<void>;
   setDirty: (dirty: boolean) => void;
+  setTheme: (theme: string) => void;
   sshConnect: () => Promise<{ host: string; user: string }>;
   sshDisconnect: () => Promise<void>;
   sshStatus: () => Promise<SshStatus>;
@@ -40,6 +52,7 @@ type HexoDesktopAPI = {
   sshPush: (rel?: string | null) => Promise<SyncResult>;
   sshExec: (kind: "generate" | "deploy" | "full") => Promise<{ code: number }>;
   onMenu: (handler: (action: MenuAction) => void) => () => void;
+  onTheme: (handler: (theme: string) => void) => () => void;
   onSshLog: (handler: (event: SshLogEvent) => void) => () => void;
   onSshStatus: (handler: (status: SshStatus) => void) => () => void;
 };

@@ -1,14 +1,19 @@
 import { useMemo } from "react";
 import { api } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
+import type { PostOrigin } from "../lib/types";
 
 type Props = {
   markdown: string;
   postPath: string | null;
+  origin?: PostOrigin;
 };
 
-export function Preview({ markdown, postPath }: Props) {
-  const html = useMemo(() => renderMarkdown(markdown, postPath), [markdown, postPath]);
+export function Preview({ markdown, postPath, origin = "local" }: Props) {
+  const html = useMemo(
+    () => renderMarkdown(markdown, postPath, origin),
+    [markdown, postPath, origin],
+  );
 
   if (!markdown.trim()) {
     return (

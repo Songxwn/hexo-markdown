@@ -21,18 +21,35 @@ const api = {
   settings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (body: unknown) => ipcRenderer.invoke("settings:save", body),
   posts: () => ipcRenderer.invoke("posts:list"),
-  readPost: (path: string) => ipcRenderer.invoke("posts:read", path),
-  savePost: (path: string, content: string) => ipcRenderer.invoke("posts:write", { path, content }),
-  createPost: (title: string, folder: "posts" | "drafts") =>
-    ipcRenderer.invoke("posts:create", { title, folder }),
-  deletePost: (path: string) => ipcRenderer.invoke("posts:delete", path),
-  renamePost: (path: string, name: string) => ipcRenderer.invoke("posts:rename", { path, name }),
-  uploadImage: (payload: { name: string; type: string; data: ArrayBuffer; postPath: string | null }) =>
-    ipcRenderer.invoke("images:upload", payload),
+  remotePosts: () => ipcRenderer.invoke("posts:remote-list"),
+  readPost: (path: string, origin?: "local" | "remote") =>
+    ipcRenderer.invoke("posts:read", { path, origin }),
+  savePost: (path: string, content: string, origin?: "local" | "remote") =>
+    ipcRenderer.invoke("posts:write", { path, content, origin }),
+  createPost: (
+    title: string,
+    folder: "posts" | "drafts",
+    templateId?: string | null,
+    origin?: "local" | "remote",
+  ) => ipcRenderer.invoke("posts:create", { title, folder, templateId, origin }),
+  templates: () => ipcRenderer.invoke("templates:get"),
+  saveTemplates: (body: unknown) => ipcRenderer.invoke("templates:save", body),
+  deletePost: (path: string, origin?: "local" | "remote") =>
+    ipcRenderer.invoke("posts:delete", { path, origin }),
+  renamePost: (path: string, name: string, origin?: "local" | "remote") =>
+    ipcRenderer.invoke("posts:rename", { path, name, origin }),
+  uploadImage: (payload: {
+    name: string;
+    type: string;
+    data: ArrayBuffer;
+    postPath: string | null;
+    origin?: "local" | "remote";
+  }) => ipcRenderer.invoke("images:upload", payload),
   pickDirectory: () => ipcRenderer.invoke("dialog:directory") as Promise<string | null>,
   pickFile: () => ipcRenderer.invoke("dialog:file") as Promise<string | null>,
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
   setDirty: (dirty: boolean) => ipcRenderer.send("window:dirty", dirty),
+  setTheme: (theme: string) => ipcRenderer.send("window:theme", theme),
   sshConnect: () => ipcRenderer.invoke("ssh:connect"),
   sshDisconnect: () => ipcRenderer.invoke("ssh:disconnect"),
   sshStatus: () => ipcRenderer.invoke("ssh:status"),
@@ -45,6 +62,11 @@ const api = {
     return () => {
       ipcRenderer.removeListener("menu", listener);
     };
+  },
+  onTheme: (handler: (theme: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, theme: string) => handler(theme);
+    ipcRenderer.on("theme", listener);
+    return () => ipcRenderer.removeListener("theme", listener);
   },
   onSshLog: (handler: (event: { kind: "out" | "err" | "sys"; text: string; ts: number }) => void) => {
     const listener = (

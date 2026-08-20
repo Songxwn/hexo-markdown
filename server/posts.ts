@@ -11,6 +11,7 @@ import {
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import matter from "gray-matter";
 import type { PostFolder, PostSummary } from "./types";
+import { applyPostTemplate, resolveTemplateBody } from "./templates";
 
 const FOLDER_MAP: Record<PostFolder, string> = {
   posts: "source/_posts",
@@ -82,6 +83,7 @@ function walkMarkdown(dir: string, root: string, folder: PostFolder, out: PostSu
       title,
       date,
       mtime: st.mtimeMs,
+      origin: "local",
     });
   }
 }
@@ -190,7 +192,7 @@ export function renamePost(hexoRoot: string, relPath: string, nextName: string):
   return { path: toRel };
 }
 
-function slugify(title: string): string {
+export function slugifyTitle(title: string): string {
   const slug = title
     .trim()
     .replace(/\s+/g, "-")
@@ -200,28 +202,40 @@ function slugify(title: string): string {
   return slug.slice(0, 80) || "untitled";
 }
 
+function uniquePostFile(
+  hexoRoot: string,
+  folder: PostFolder,
+  title: string,
+): { filename: string; slug: string; relPath: string } {
+  const base = slugifyTitle(title);
+  for (let n = 0; n < 200; n++) {
+    const stem = n === 0 ? base : `${base}-${n + 1}`;
+    const filename = sanitizePostFilename(stem);
+    const relPath = `${FOLDER_MAP[folder]}/${filename}`;
+    const abs = resolveRel(hexoRoot, relPath);
+    if (!existsSync(abs)) {
+      return { filename, slug: filename.replace(/\.md$/i, ""), relPath };
+    }
+  }
+  throw new Error("无法生成不重复的文件名");
+}
+
 export function createPost(
   hexoRoot: string,
   title: string,
   folder: PostFolder,
+  templateId?: string | null,
 ): { path: string; content: string } {
   const now = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
-  const filename = `${stamp}-${slugify(title)}.md`;
-  const relPath = `${FOLDER_MAP[folder]}/${filename}`;
+  const { filename, slug, relPath } = uniquePostFile(hexoRoot, folder, title);
   const abs = resolveRel(hexoRoot, relPath);
-  if (existsSync(abs)) {
-    throw new Error("同名文章已存在");
-  }
-  const content = `---
-title: ${JSON.stringify(title.replace(/\r?\n/g, " ").trim())}
-date: ${hexoDate(now)}
-tags:
-categories:
----
-
-`;
+  const raw = resolveTemplateBody(hexoRoot, templateId);
+  const content = applyPostTemplate(raw, {
+    title: title.replace(/\r?\n/g, " ").trim() || "未命名",
+    date: hexoDate(now),
+    slug,
+    filename,
+  });
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, content, "utf8");
   return { path: relPath, content };

@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hexo Markdown</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("hexo-theme");
+          if (t === "ink" || t === "paper" || t === "midnight" || t === "celadon") {
+            document.documentElement.dataset.theme = t;
+            document.documentElement.style.colorScheme = t === "paper" ? "light" : "dark";
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -55,7 +55,7 @@ export function RenamePostModal({ target, onClose, onRename }: Props) {
       <div className="modal compact" onClick={(e) => e.stopPropagation()}>
         <header>
           <h2>修改文件名</h2>
-          <p>Hexo 默认用文件名作为文章链接。有日期前缀时，链接通常取前缀后面的部分。</p>
+          <p>Hexo 默认用文件名作为文章链接。本应用新建时不再加日期前缀。</p>
         </header>
         <label>
           新文件名
@@ -66,7 +66,7 @@ export function RenamePostModal({ target, onClose, onRename }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter") void submit();
             }}
-            placeholder="2024-08-19-hello-world"
+            placeholder="hello-world"
           />
         </label>
         <p className="rename-preview">

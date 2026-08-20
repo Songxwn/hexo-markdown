@@ -1,8 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_THEME, normalizeTheme } from "./theme";
 import type { AppConfig } from "./types";
 
 let dataDir = join(process.cwd(), "data");
+
+export function getDataDir(): string {
+  return dataDir;
+}
 
 function configPath(): string {
   return join(dataDir, "config.json");
@@ -58,6 +63,7 @@ export function defaultConfig(): AppConfig {
     sshGenerateCmd: process.env.SSH_GENERATE_CMD?.trim() || "npx hexo generate",
     sshDeployCmd: process.env.SSH_DEPLOY_CMD?.trim() || "npx hexo deploy",
     autoUploadOnSave: process.env.SSH_AUTO_UPLOAD === "1",
+    theme: normalizeTheme(process.env.THEME || DEFAULT_THEME),
   };
 }
 
@@ -77,6 +83,7 @@ function normalize(cfg: AppConfig): AppConfig {
   cfg.autoUploadOnSave = Boolean(cfg.autoUploadOnSave);
   cfg.remoteHexoRoot = (cfg.remoteHexoRoot || "").replace(/\\/g, "/").replace(/\/+$/, "");
   if (cfg.r2PublicUrl) cfg.r2PublicUrl = cfg.r2PublicUrl.replace(/\/+$/, "");
+  cfg.theme = normalizeTheme(cfg.theme);
   return cfg;
 }
 

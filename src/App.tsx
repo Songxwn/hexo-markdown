@@ -21,30 +21,37 @@ import { RemoteBar } from "./components/RemoteBar";
 import { RemoteLog } from "./components/RemoteLog";
 import { RenamePostModal } from "./components/RenamePostModal";
 import { SettingsModal } from "./components/SettingsModal";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, type SidebarTab } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { api } from "./lib/api";
 import { countWords, imageFileName, parseTitle } from "./lib/markdown";
-import type { AppInfo, AppSettings, PostFolder, PostSummary, SshLogEvent, SshStatus } from "./lib/types";
+import { applyTheme, normalizeTheme } from "./lib/theme";
+import type { AppInfo, AppSettings, PostFolder, PostOrigin, PostSummary, SshLogEvent, SshStatus, TemplateSet } from "./lib/types";
 
 type Toast = { kind: "ok" | "err"; text: string };
 
 export default function App() {
   const editorRef = useRef<EditorHandle>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [templates, setTemplates] = useState<TemplateSet | null>(null);
   const [posts, setPosts] = useState<PostSummary[]>([]);
+  const [remotePosts, setRemotePosts] = useState<PostSummary[]>([]);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("all");
   const [path, setPath] = useState<string | null>(null);
+  const [editingOrigin, setEditingOrigin] = useState<PostOrigin>("local");
   const [content, setContent] = useState("");
   const [saved, setSaved] = useState("");
   const [split, setSplit] = useState(52);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string; origin: PostOrigin } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingPost, setSavingPost] = useState(false);
   const [uploadHint, setUploadHint] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [loadingList, setLoadingList] = useState(false);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
   const [ssh, setSsh] = useState<SshStatus>({ connected: false, host: "", user: "", busy: false });
   const [sshLogs, setSshLogs] = useState<SshLogEvent[]>([]);
   const [logOpen, setLogOpen] = useState(false);
@@ -77,13 +84,35 @@ export default function App() {
     }
   }, [notify]);
 
+  const refreshRemotePosts = useCallback(async (silent = false) => {
+    if (!ssh.connected) {
+      setRemotePosts([]);
+      setRemoteError(null);
+      return;
+    }
+    if (!silent) setLoadingRemote(true);
+    try {
+      setRemotePosts(await api.remotePosts());
+      setRemoteError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "无法读取远程文章";
+      setRemoteError(message);
+      if (!silent) notify("err", message);
+    } finally {
+      setLoadingRemote(false);
+    }
+  }, [notify, ssh.connected]);
+
   const boot = useCallback(async () => {
     try {
-      const [next, info] = await Promise.all([
+      const [next, info, tpl] = await Promise.all([
         api.settings(),
         api.appInfo().catch(() => null),
+        api.templates().catch(() => null),
       ]);
       setSettings(next);
+      if (tpl) setTemplates(tpl);
+      applyTheme(normalizeTheme(next.theme));
       if (info) setAppInfo(info);
       try {
         setSsh(await api.sshStatus());
@@ -102,6 +131,14 @@ export default function App() {
   }, [boot]);
 
   useEffect(() => {
+    return api.onTheme((theme) => {
+      const id = normalizeTheme(theme);
+      applyTheme(id);
+      setSettings((prev) => (prev ? { ...prev, theme: id } : prev));
+    });
+  }, []);
+
+  useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!dirty) return;
       e.preventDefault();
@@ -115,8 +152,10 @@ export default function App() {
     async (post: PostSummary) => {
       if (dirty && !window.confirm("当前文章未保存，确定切换？")) return;
       try {
-        const file = await api.readPost(post.path);
+        const origin = post.origin || "local";
+        const file = await api.readPost(post.path, origin);
         setPath(file.path);
+        setEditingOrigin(origin);
         setContent(file.content);
         setSaved(file.content);
       } catch (error) {
@@ -133,95 +172,121 @@ export default function App() {
     }
     setSavingPost(true);
     try {
-      await api.savePost(path, content);
+      await api.savePost(path, content, editingOrigin);
       setSaved(content);
-      if (settings?.autoUploadOnSave && settings.sshConfigured) {
+      if (editingOrigin === "remote") {
+        notify("ok", "已保存到服务器");
+        await refreshRemotePosts(true);
+      } else if (settings?.autoUploadOnSave && settings.sshConfigured) {
         setLogOpen(true);
         const result = await api.sshPush(path);
         notify("ok", `已保存并上传 ${result.files} 个文件`);
+        await refreshPosts();
       } else {
         notify("ok", "已保存");
+        await refreshPosts();
       }
-      await refreshPosts();
     } catch (error) {
       notify("err", error instanceof Error ? error.message : "保存失败");
     } finally {
       setSavingPost(false);
     }
-  }, [content, notify, path, refreshPosts, settings?.autoUploadOnSave, settings?.sshConfigured]);
+  }, [
+    content,
+    editingOrigin,
+    notify,
+    path,
+    refreshPosts,
+    refreshRemotePosts,
+    settings?.autoUploadOnSave,
+    settings?.sshConfigured,
+  ]);
 
   const createPost = useCallback(
-    async (postTitle: string, folder: PostFolder) => {
+    async (postTitle: string, folder: PostFolder, templateId: string) => {
+      const origin: PostOrigin = sidebarTab === "posts" ? "remote" : "local";
+      if (origin === "remote" && !ssh.connected) {
+        notify("err", "请先连接 SSH，才能在服务器上新建已发布文章");
+        throw new Error("SSH 未连接");
+      }
       try {
-        const file = await api.createPost(postTitle, folder);
+        const file = await api.createPost(postTitle, folder, templateId, origin);
         setPath(file.path);
+        setEditingOrigin(origin);
         setContent(file.content);
         setSaved(file.content);
         setNewOpen(false);
-        notify("ok", "已创建");
-        await refreshPosts();
+        notify("ok", origin === "remote" ? "已在服务器创建" : "已创建");
+        if (origin === "remote") await refreshRemotePosts();
+        else await refreshPosts();
       } catch (error) {
         notify("err", error instanceof Error ? error.message : "创建失败");
         throw error;
       }
     },
-    [notify, refreshPosts],
+    [notify, refreshPosts, refreshRemotePosts, sidebarTab, ssh.connected],
   );
 
   const deletePost = useCallback(
     async (post: PostSummary) => {
-      if (!window.confirm(`删除「${post.title}」？此操作不可撤销。`)) return;
+      const origin = post.origin || "local";
+      const where = origin === "remote" ? "服务器上的" : "";
+      if (!window.confirm(`删除${where}「${post.title}」？此操作不可撤销。`)) return;
       try {
-        await api.deletePost(post.path);
-        if (path === post.path) {
+        await api.deletePost(post.path, origin);
+        if (path === post.path && editingOrigin === origin) {
           setPath(null);
           setContent("");
           setSaved("");
         }
-        notify("ok", "已删除");
-        await refreshPosts();
+        notify("ok", origin === "remote" ? "已从服务器删除" : "已删除");
+        if (origin === "remote") await refreshRemotePosts();
+        else await refreshPosts();
       } catch (error) {
         notify("err", error instanceof Error ? error.message : "删除失败");
       }
     },
-    [notify, path, refreshPosts],
+    [editingOrigin, notify, path, refreshPosts, refreshRemotePosts],
   );
 
-  const openRename = useCallback(
-    (postPath: string, name?: string) => {
-      setRenameTarget({
-        path: postPath,
-        name: name || postPath.split("/").pop() || "",
-      });
-    },
-    [],
-  );
+  const openRename = useCallback((postPath: string, name?: string, origin: PostOrigin = editingOrigin) => {
+    setRenameTarget({
+      path: postPath,
+      name: name || postPath.split("/").pop() || "",
+      origin,
+    });
+  }, [editingOrigin]);
 
   const renamePost = useCallback(
     async (fromPath: string, nextName: string) => {
+      const origin = renameTarget?.origin || editingOrigin;
       try {
-        const result = await api.renamePost(fromPath, nextName);
-        if (path === fromPath) {
+        const result = await api.renamePost(fromPath, nextName, origin);
+        if (path === fromPath && editingOrigin === origin) {
           setPath(result.path);
         }
         setRenameTarget(null);
         const filename = result.path.split("/").pop() || result.path;
         notify("ok", `已重命名为 ${filename}`);
-        await refreshPosts();
+        if (origin === "remote") await refreshRemotePosts();
+        else await refreshPosts();
       } catch (error) {
         notify("err", error instanceof Error ? error.message : "重命名失败");
         throw error;
       }
     },
-    [notify, path, refreshPosts],
+    [editingOrigin, notify, path, refreshPosts, refreshRemotePosts, renameTarget?.origin],
   );
 
   const saveSettings = useCallback(
-    async (patch: Partial<AppSettings>) => {
+    async (patch: Partial<AppSettings>, nextTemplates: TemplateSet) => {
       setSavingSettings(true);
       try {
         const next = await api.saveSettings(patch);
+        const tpl = await api.saveTemplates(nextTemplates);
         setSettings(next);
+        setTemplates(tpl);
+        applyTheme(normalizeTheme(next.theme));
         setSettingsOpen(false);
         notify("ok", "设置已保存");
         if (next.hexoValid) await refreshPosts();
@@ -242,10 +307,14 @@ export default function App() {
       editorRef.current?.insertAtCursor(`${placeholder}\n`);
       setUploadHint(settings?.r2Configured ? "正在上传到 Cloudflare R2…" : "正在保存图片…");
       try {
-        const result = await api.uploadImage(file, path);
+        const result = await api.uploadImage(file, path, editingOrigin);
         editorRef.current?.replaceText(placeholder, `![${name}](${result.url})`);
         const hint =
-          result.storage === "r2" ? "图片已上传到 R2" : "R2 未配置，已写入文章资源目录";
+          result.storage === "r2"
+            ? "图片已上传到 R2"
+            : result.storage === "remote"
+              ? "图片已保存到服务器资源目录"
+              : "R2 未配置，已写入文章资源目录";
         setUploadHint(hint);
         notify("ok", hint);
       } catch (error) {
@@ -255,7 +324,7 @@ export default function App() {
         notify("err", message);
       }
     },
-    [notify, path, settings?.r2Configured],
+    [notify, path, editingOrigin, settings?.r2Configured],
   );
 
   const runRemote = useCallback(
@@ -265,12 +334,32 @@ export default function App() {
         await fn();
         notify("ok", label);
         await refreshPosts();
+        await refreshRemotePosts(true);
       } catch (error) {
         notify("err", error instanceof Error ? error.message : label);
       }
     },
-    [notify, refreshPosts],
+    [notify, refreshPosts, refreshRemotePosts],
   );
+
+  useEffect(() => {
+    if (ssh.connected) {
+      void refreshRemotePosts();
+      return;
+    }
+    setRemotePosts([]);
+    setRemoteError(null);
+  }, [refreshRemotePosts, ssh.connected]);
+
+  useEffect(() => {
+    if (sidebarTab !== "posts" || !ssh.connected) return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      if (ssh.busy) return;
+      void refreshRemotePosts(true);
+    }, 12000);
+    return () => window.clearInterval(id);
+  }, [refreshRemotePosts, sidebarTab, ssh.busy, ssh.connected]);
 
   useEffect(() => {
     try {
@@ -299,13 +388,19 @@ export default function App() {
     try {
       return api.onMenu((action) => {
         if (action === "save") void savePost();
-        if (action === "new") setNewOpen(true);
+        if (action === "new") {
+          if (sidebarTab === "posts" && !ssh.connected) {
+            notify("err", "请先连接 SSH，才能在服务器上新建已发布文章");
+            return;
+          }
+          setNewOpen(true);
+        }
         if (action === "rename") {
           if (!path) {
             notify("err", "请先打开一篇文章");
             return;
           }
-          openRename(path);
+          openRename(path, undefined, editingOrigin);
         }
         if (action === "settings") setSettingsOpen(true);
         if (action === "about") setAboutOpen(true);
@@ -315,6 +410,10 @@ export default function App() {
         if (action === "ssh-push-current") {
           if (!path) {
             notify("err", "请先打开一篇文章");
+            return;
+          }
+          if (editingOrigin === "remote") {
+            notify("ok", "当前是远程文章，保存即写回服务器");
             return;
           }
           void runRemote("已推送当前文章", () => api.sshPush(path));
@@ -327,7 +426,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [notify, openRename, path, runRemote, savePost]);
+  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -368,11 +467,20 @@ export default function App() {
           </div>
         </div>
         <div className="title-center" title={path || ""}>
-          {path ? title : "未打开文章"}
+          {path ? `${editingOrigin === "remote" ? "远程 · " : ""}${title}` : "未打开文章"}
           {dirty ? <span className="dirty-dot" title="未保存" /> : null}
         </div>
         <div className="title-actions">
-          <button className="btn ghost" onClick={() => setNewOpen(true)}>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (sidebarTab === "posts" && !ssh.connected) {
+                notify("err", "请先连接 SSH，才能在服务器上新建已发布文章");
+                return;
+              }
+              setNewOpen(true);
+            }}
+          >
             <Plus size={15} />
             新建
           </button>
@@ -392,10 +500,20 @@ export default function App() {
       <div className="body">
         <Sidebar
           posts={posts}
+          remotePosts={remotePosts}
+          tab={sidebarTab}
+          onTabChange={setSidebarTab}
           activePath={path}
+          activeOrigin={editingOrigin}
+          ssh={ssh}
+          sshConfigured={Boolean(settings?.sshConfigured)}
+          loadingRemote={loadingRemote}
+          remoteError={remoteError}
           onOpen={(p) => void openPost(p)}
-          onRename={(p) => openRename(p.path, p.name)}
+          onRename={(p) => openRename(p.path, p.name, p.origin)}
           onDelete={(p) => void deletePost(p)}
+          onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
 
         <section className="workspace">
@@ -425,8 +543,16 @@ export default function App() {
             <button onClick={pickImage} title="插入图片并上传">
               <ImagePlus size={15} />
             </button>
-            <span className="toolbar-note">粘贴或拖入图片 → 自动上传 R2</span>
-            {loadingList && <span className="toolbar-note">正在读取文章…</span>}
+            <span className="toolbar-note">
+              {editingOrigin === "remote"
+                ? "远程文章 · 保存即写回服务器"
+                : "粘贴或拖入图片 → 自动上传 R2"}
+            </span>
+            {(loadingList || loadingRemote) && (
+              <span className="toolbar-note">
+                {loadingRemote && sidebarTab === "posts" ? "正在读取远程文章…" : "正在读取文章…"}
+              </span>
+            )}
           </div>
           <RemoteBar
             ssh={ssh}
@@ -439,6 +565,10 @@ export default function App() {
             onPushCurrent={() => {
               if (!path) {
                 notify("err", "请先打开一篇文章");
+                return;
+              }
+              if (editingOrigin === "remote") {
+                notify("ok", "当前是远程文章，保存即写回服务器");
                 return;
               }
               void runRemote("已推送当前文章", () => api.sshPush(path));
@@ -458,16 +588,29 @@ export default function App() {
               </div>
               <div className="divider" onMouseDown={startResize} />
               <div className="pane preview-pane">
-                <Preview markdown={content} postPath={path} />
+                <Preview markdown={content} postPath={path} origin={editingOrigin} />
               </div>
             </div>
           ) : (
             <div className="empty-workspace">
               <span className="mark empty-mark" aria-hidden />
-              <h1>从一篇文章开始</h1>
-              <p>选择左侧列表，或新建 Markdown。粘贴截图会上传到 Cloudflare R2，并插入公开 URL。</p>
+              <h1>{sidebarTab === "posts" ? "查看远程已发布文章" : "从一篇文章开始"}</h1>
+              <p>
+                {sidebarTab === "posts"
+                  ? "连接 SSH 后，左侧「已发布」会实时列出服务器 source/_posts。打开即可修改或删除，保存会写回远程。"
+                  : "选择左侧列表，或新建 Markdown。粘贴截图会上传到 Cloudflare R2，并插入公开 URL。"}
+              </p>
               <div className="empty-actions">
-                <button className="btn primary" onClick={() => setNewOpen(true)}>
+                <button
+                  className="btn primary"
+                  onClick={() => {
+                    if (sidebarTab === "posts" && !ssh.connected) {
+                      notify("err", "请先连接 SSH，才能在服务器上新建已发布文章");
+                      return;
+                    }
+                    setNewOpen(true);
+                  }}
+                >
                   新建文章
                 </button>
                 <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
@@ -482,6 +625,7 @@ export default function App() {
 
       <StatusBar
         path={path}
+        origin={editingOrigin}
         words={words.words}
         chars={words.chars}
         dirty={dirty}
@@ -495,7 +639,7 @@ export default function App() {
             notify("err", "请先打开一篇文章");
             return;
           }
-          openRename(path);
+          openRename(path, undefined, editingOrigin);
         }}
         onAbout={() => setAboutOpen(true)}
       />
@@ -503,12 +647,23 @@ export default function App() {
       <SettingsModal
         open={settingsOpen}
         settings={settings}
+        templates={templates}
         saving={savingSettings}
         version={appInfo?.version}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          if (settings) applyTheme(normalizeTheme(settings.theme));
+          setSettingsOpen(false);
+        }}
         onSave={saveSettings}
       />
-      <NewPostModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createPost} />
+      <NewPostModal
+        open={newOpen}
+        templates={templates}
+        remote={sidebarTab === "posts"}
+        defaultFolder={sidebarTab === "drafts" ? "drafts" : "posts"}
+        onClose={() => setNewOpen(false)}
+        onCreate={createPost}
+      />
       <RenamePostModal
         target={renameTarget}
         onClose={() => setRenameTarget(null)}

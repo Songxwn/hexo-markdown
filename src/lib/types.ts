@@ -1,4 +1,23 @@
+import type { ThemeId } from "./theme";
+
+export type { ThemeId };
+
 export type PostFolder = "posts" | "drafts";
+
+export type PostTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  readonly?: boolean;
+};
+
+export type TemplateSet = {
+  defaultId: string;
+  items: PostTemplate[];
+  scaffolds: PostTemplate[];
+};
+
+export type PostOrigin = "local" | "remote";
 
 export type PostSummary = {
   path: string;
@@ -7,6 +26,7 @@ export type PostSummary = {
   title: string;
   date: string;
   mtime: number;
+  origin: PostOrigin;
 };
 
 export type AppSettings = {
@@ -28,6 +48,7 @@ export type AppSettings = {
   sshGenerateCmd: string;
   sshDeployCmd: string;
   autoUploadOnSave: boolean;
+  theme: ThemeId;
   r2Configured: boolean;
   sshConfigured: boolean;
   hexoValid: boolean;
@@ -37,7 +58,7 @@ export type AppSettings = {
 export type UploadResult = {
   url: string;
   key: string;
-  storage: "r2" | "local";
+  storage: "r2" | "local" | "remote";
 };
 
 export type SshStatus = {

@@ -12,8 +12,20 @@ import {
   writePost,
 } from "./posts";
 import { uploadToR2 } from "./r2";
-import { isSshConfigured } from "./ssh";
-import type { AppConfig, PostFolder } from "./types";
+import {
+  isSshConfigured,
+  sshCreateRemotePost,
+  sshDeleteRemotePost,
+  sshListRemotePosts,
+  sshReadRemoteMedia,
+  sshReadRemotePost,
+  sshRenameRemotePost,
+  sshSaveRemoteAsset,
+  sshWriteRemotePost,
+} from "./ssh";
+import { listTemplates, saveTemplates } from "./templates";
+import { normalizeTheme } from "./theme";
+import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "./types";
 
 const IMAGE_TYPES = new Set([
   "image/png",
@@ -56,6 +68,7 @@ export function publicConfig() {
     sshGenerateCmd: cfg.sshGenerateCmd,
     sshDeployCmd: cfg.sshDeployCmd,
     autoUploadOnSave: cfg.autoUploadOnSave,
+    theme: cfg.theme,
     r2Configured: isR2Configured(cfg),
     sshConfigured: isSshConfigured(),
     hexoValid: hexo.ok,
@@ -112,35 +125,72 @@ export function updateSettings(body: Partial<AppConfig> & Record<string, unknown
   if (typeof body.autoUploadOnSave === "boolean") {
     patch.autoUploadOnSave = body.autoUploadOnSave;
   }
+  if (typeof body.theme === "string") {
+    patch.theme = normalizeTheme(body.theme);
+  }
   saveConfig({ ...current, ...patch });
   return publicConfig();
+}
+
+function isRemote(origin?: PostOrigin | string | null): boolean {
+  return origin === "remote";
 }
 
 export function getPosts() {
   return listPosts(requireHexo().hexoRoot);
 }
 
-export function getPost(rel: string) {
+export function getRemotePosts() {
+  return sshListRemotePosts();
+}
+
+export function getPost(rel: string, origin?: PostOrigin | null) {
   if (!rel) throw new Error("缺少 path");
+  if (isRemote(origin)) return sshReadRemotePost(rel);
   return readPost(requireHexo().hexoRoot, rel);
 }
 
-export function putPost(rel: string, content: string) {
+export function putPost(rel: string, content: string, origin?: PostOrigin | null) {
   if (!rel) throw new Error("缺少 path");
+  if (isRemote(origin)) return sshWriteRemotePost(rel, content);
   return writePost(requireHexo().hexoRoot, rel, content);
 }
 
-export function newPost(title: string, folder: PostFolder) {
-  return createPost(requireHexo().hexoRoot, title.trim() || "未命名", folder === "drafts" ? "drafts" : "posts");
+export function getTemplates() {
+  return listTemplates(loadConfig().hexoRoot);
 }
 
-export function removePost(rel: string) {
+export function updateTemplates(body: Partial<TemplateSet> & Record<string, unknown>) {
+  saveTemplates(body);
+  return listTemplates(loadConfig().hexoRoot);
+}
+
+export function newPost(
+  title: string,
+  folder: PostFolder,
+  templateId?: string | null,
+  origin?: PostOrigin | null,
+) {
+  if (isRemote(origin)) {
+    return sshCreateRemotePost(title.trim() || "未命名", templateId);
+  }
+  return createPost(
+    requireHexo().hexoRoot,
+    title.trim() || "未命名",
+    folder === "drafts" ? "drafts" : "posts",
+    templateId,
+  );
+}
+
+export function removePost(rel: string, origin?: PostOrigin | null) {
   if (!rel) throw new Error("缺少 path");
+  if (isRemote(origin)) return sshDeleteRemotePost(rel);
   deletePost(requireHexo().hexoRoot, rel);
 }
 
-export function renamePost(rel: string, nextName: string) {
+export function renamePost(rel: string, nextName: string, origin?: PostOrigin | null) {
   if (!rel) throw new Error("缺少 path");
+  if (isRemote(origin)) return sshRenameRemotePost(rel, nextName);
   return renamePostFile(requireHexo().hexoRoot, rel, nextName);
 }
 
@@ -149,7 +199,16 @@ export function mediaAbsolutePath(rel: string) {
   return resolveMedia(requireHexo().hexoRoot, rel);
 }
 
-export async function uploadImage(file: UploadInput, postPath: string | null) {
+export function remoteMediaBytes(rel: string) {
+  if (!rel) throw new Error("缺少 path");
+  return sshReadRemoteMedia(rel);
+}
+
+export async function uploadImage(
+  file: UploadInput,
+  postPath: string | null,
+  origin?: PostOrigin | null,
+) {
   const ext = extname(file.originalname).toLowerCase();
   if (!IMAGE_TYPES.has(file.mimetype) && !IMAGE_EXTS.includes(ext)) {
     throw new Error("仅支持图片文件");
@@ -161,6 +220,11 @@ export async function uploadImage(file: UploadInput, postPath: string | null) {
   if (isR2Configured(cfg)) {
     const result = await uploadToR2(cfg, file);
     return { ...result, storage: "r2" as const };
+  }
+  if (isRemote(origin)) {
+    if (!postPath) throw new Error("请先打开一篇远程文章");
+    const result = await sshSaveRemoteAsset(postPath, file);
+    return { ...result, storage: "remote" as const };
   }
   const hexo = validateHexoRoot(cfg.hexoRoot);
   if (!hexo.ok || !postPath) {

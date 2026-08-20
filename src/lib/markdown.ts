@@ -54,9 +54,10 @@ function preprocessHexo(md: string): string {
     );
 }
 
-function rewriteLocalImages(html: string, postPath: string | null): string {
+function rewriteLocalImages(html: string, postPath: string | null, origin: "local" | "remote" = "local"): string {
   if (!postPath) return html;
   const assetDir = postPath.replace(/\.md$/i, "/");
+  const scheme = origin === "remote" ? "remote" : "local";
   return html.replace(/<img\s([^>]*?)src="([^"]+)"/gi, (full, pre: string, src: string) => {
     if (/^(https?:|data:|blob:|\/\/|hexomd:)/i.test(src)) return full;
     const rel = src.replace(/^\.\//, "");
@@ -65,14 +66,18 @@ function rewriteLocalImages(html: string, postPath: string | null): string {
       .split("/")
       .map((part) => encodeURIComponent(part))
       .join("/");
-    return `<img ${pre}src="hexomd://local/${encoded}"`;
+    return `<img ${pre}src="hexomd://${scheme}/${encoded}"`;
   });
 }
 
-export function renderMarkdown(raw: string, postPath: string | null): string {
+export function renderMarkdown(
+  raw: string,
+  postPath: string | null,
+  origin: "local" | "remote" = "local",
+): string {
   const body = preprocessHexo(stripFrontMatter(raw));
   const html = marked.parse(body, { async: false }) as string;
-  return DOMPurify.sanitize(rewriteLocalImages(html, postPath), {
+  return DOMPurify.sanitize(rewriteLocalImages(html, postPath, origin), {
     ADD_ATTR: ["target"],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|hexomd|data|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
@@ -85,6 +90,16 @@ export function countWords(raw: string): { chars: number; words: number } {
   const cn = (body.match(/[\u4e00-\u9fff]/g) || []).length;
   const en = (body.replace(/[\u4e00-\u9fff]/g, "").match(/[A-Za-z0-9]+/g) || []).length;
   return { chars, words: cn + en };
+}
+
+export function slugifyFilename(title: string): string {
+  const slug = title
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${(slug.slice(0, 80) || "untitled")}.md`;
 }
 
 export function imageFileName(file: File): string {

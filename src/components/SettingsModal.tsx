@@ -1,15 +1,17 @@
-import { FolderOpen, KeyRound } from "lucide-react";
+import { FolderOpen, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { AppSettings } from "../lib/types";
+import { applyTheme, DEFAULT_THEME, THEMES } from "../lib/theme";
+import type { AppSettings, PostTemplate, TemplateSet } from "../lib/types";
 
 type Props = {
   open: boolean;
   settings: AppSettings | null;
+  templates: TemplateSet | null;
   saving: boolean;
   version?: string;
   onClose: () => void;
-  onSave: (patch: Partial<AppSettings>) => Promise<void>;
+  onSave: (patch: Partial<AppSettings>, templates: TemplateSet) => Promise<void>;
 };
 
 const empty: Partial<AppSettings> = {
@@ -31,10 +33,39 @@ const empty: Partial<AppSettings> = {
   sshGenerateCmd: "npx hexo generate",
   sshDeployCmd: "npx hexo deploy",
   autoUploadOnSave: false,
+  theme: DEFAULT_THEME,
 };
 
-export function SettingsModal({ open, settings, saving, version, onClose, onSave }: Props) {
+const defaultTemplateBody = `---
+title: {{ title }}
+date: {{ date }}
+tags:
+categories:
+---
+
+`;
+
+function cloneUserTemplates(set: TemplateSet | null): { defaultId: string; items: PostTemplate[] } {
+  if (!set?.items.length) {
+    return {
+      defaultId: "default",
+      items: [{ id: "default", name: "默认文章", body: defaultTemplateBody }],
+    };
+  }
+  return {
+    defaultId: set.defaultId,
+    items: set.items.map((item) => ({ id: item.id, name: item.name, body: item.body })),
+  };
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return <small className="field-hint">{children}</small>;
+}
+
+export function SettingsModal({ open, settings, templates, saving, version, onClose, onSave }: Props) {
   const [form, setForm] = useState(empty);
+  const [tpl, setTpl] = useState(cloneUserTemplates(templates));
+  const [activeTpl, setActiveTpl] = useState(tpl.defaultId);
 
   useEffect(() => {
     if (open && settings) {
@@ -57,9 +88,13 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
         sshGenerateCmd: settings.sshGenerateCmd || "npx hexo generate",
         sshDeployCmd: settings.sshDeployCmd || "npx hexo deploy",
         autoUploadOnSave: Boolean(settings.autoUploadOnSave),
+        theme: settings.theme || DEFAULT_THEME,
       });
+      const next = cloneUserTemplates(templates);
+      setTpl(next);
+      setActiveTpl(next.items.some((item) => item.id === next.defaultId) ? next.defaultId : next.items[0].id);
     }
-  }, [open, settings]);
+  }, [open, settings, templates]);
 
   if (!open) return null;
 
@@ -67,22 +102,76 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const currentTpl = tpl.items.find((item) => item.id === activeTpl) || tpl.items[0];
+
+  function patchTpl(id: string, patch: Partial<PostTemplate>) {
+    setTpl((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    }));
+  }
+
+  function addTpl() {
+    const id = `tpl-${Date.now().toString(36)}`;
+    const item: PostTemplate = { id, name: "新模板", body: defaultTemplateBody };
+    setTpl((prev) => ({ ...prev, items: [...prev.items, item] }));
+    setActiveTpl(id);
+  }
+
+  function removeTpl() {
+    if (tpl.items.length <= 1 || !currentTpl) return;
+    const rest = tpl.items.filter((item) => item.id !== currentTpl.id);
+    const defaultId = tpl.defaultId === currentTpl.id ? rest[0].id : tpl.defaultId;
+    setTpl({ defaultId, items: rest });
+    setActiveTpl(defaultId);
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal settings-wide" onClick={(e) => e.stopPropagation()}>
         <header>
           <h2>设置</h2>
-          <p>配置保存在本机。密钥只用于 Cloudflare R2 和你填写的 SSH 服务器。</p>
+          <p>
+            配置只保存在本机。密钥仅用于 Cloudflare R2 和你填写的 SSH 服务器，不会上传到别处。标了必填的项需要先填好，对应功能才能用。
+          </p>
         </header>
 
+        <h3>外观</h3>
+        <p className="section-hint">点选即可预览，保存后写入本机配置。也可从菜单栏「视图 → 外观」切换。</p>
+        <div className="skin-grid">
+          {THEMES.map((skin) => {
+            const selected = (form.theme || DEFAULT_THEME) === skin.id;
+            return (
+              <button
+                key={skin.id}
+                type="button"
+                className={`skin-card ${selected ? "on" : ""}`}
+                onClick={() => {
+                  set("theme", skin.id);
+                  applyTheme(skin.id, { persist: false });
+                }}
+              >
+                <span className="skin-swatches" aria-hidden>
+                  {skin.swatches.map((color) => (
+                    <i key={color} style={{ background: color }} />
+                  ))}
+                </span>
+                <strong>{skin.name}</strong>
+                <small>{skin.desc}</small>
+              </button>
+            );
+          })}
+        </div>
+
         <h3>本地 Hexo</h3>
+        <p className="section-hint">文章列表、保存和本地图片备份都基于这个目录。请指向 Hexo 站点根目录，而不是 `source/_posts`。</p>
         <label>
-          博客根目录
+          博客根目录 <span className="req">必填</span>
           <div className="path-row">
             <input
               value={form.hexoRoot || ""}
               onChange={(e) => set("hexoRoot", e.target.value)}
-              placeholder="例如 F:\blog 或 /home/me/blog"
+              placeholder="例如 F:\blog 或 /Users/me/blog"
             />
             <button
               type="button"
@@ -96,25 +185,91 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               浏览
             </button>
           </div>
-          <small>需包含 _config.yml 与 source/_posts，SFTP 会与该目录同步。</small>
+          <Hint>目录里应有 `_config.yml`，以及 `source/_posts`（已发布）和可选的 `source/_drafts`（草稿）。SFTP 同步也以这里为本地端。</Hint>
           {settings && settings.hexoRoot && !settings.hexoHasConfig && (
-            <small className="warn-text">当前路径下没有找到 _config.yml，请确认这是 Hexo 根目录。</small>
+            <small className="warn-text">当前路径下没有找到 `_config.yml`，请确认这是 Hexo 根目录。</small>
           )}
         </label>
 
+        <h3>文章模板</h3>
+        <p className="section-hint">
+          新建文章会套用选中的模板，并把 <code>date</code> 写成当前时间。文件名只保留标题，不再加日期前缀。占位符：
+          <code>{"{{ title }}"}</code>、<code>{"{{ date }}"}</code>、<code>{"{{ slug }}"}</code>。
+          {templates?.scaffolds.length
+            ? " 博客目录里的 scaffolds/post.md、draft.md 也会出现在新建菜单中。"
+            : ""}
+        </p>
+        <div className="template-toolbar">
+          <select value={currentTpl?.id || ""} onChange={(e) => setActiveTpl(e.target.value)}>
+            {tpl.items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+                {item.id === tpl.defaultId ? "（默认）" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => currentTpl && setTpl((prev) => ({ ...prev, defaultId: currentTpl.id }))}
+          >
+            设为默认
+          </button>
+          <button type="button" className="btn ghost" onClick={addTpl}>
+            <Plus size={15} />
+            新建
+          </button>
+          <button type="button" className="btn ghost" onClick={removeTpl} disabled={tpl.items.length <= 1}>
+            <Trash2 size={15} />
+            删除
+          </button>
+        </div>
+        {currentTpl ? (
+          <>
+            <label>
+              模板名称
+              <input value={currentTpl.name} onChange={(e) => patchTpl(currentTpl.id, { name: e.target.value })} />
+            </label>
+            <label>
+              模板内容
+              <textarea
+                value={currentTpl.body}
+                onChange={(e) => patchTpl(currentTpl.id, { body: e.target.value })}
+                spellCheck={false}
+              />
+              <Hint>保存设置后生效。`date` 即使写在模板里，新建时也会改成此刻的时间。</Hint>
+            </label>
+          </>
+        ) : null}
+
         <h3>Cloudflare R2</h3>
+        <p className="section-hint">
+          粘贴或拖入图片时上传到对象存储，并插入公开 URL。整组留空则改为保存到当前文章旁边的资源目录。可在 Cloudflare 控制台 → R2 → 管理 API 令牌 中创建密钥。
+        </p>
         <div className="modal-grid">
           <label>
             Account ID
-            <input value={form.r2AccountId || ""} onChange={(e) => set("r2AccountId", e.target.value)} />
+            <input
+              value={form.r2AccountId || ""}
+              onChange={(e) => set("r2AccountId", e.target.value)}
+              placeholder="32 位，例如 1a2b3c…"
+            />
+            <Hint>Cloudflare 仪表盘右栏，或 R2 概览页的 Account ID。用于连接 https://账号ID.r2.cloudflarestorage.com。</Hint>
           </label>
           <label>
             Bucket
-            <input value={form.r2Bucket || ""} onChange={(e) => set("r2Bucket", e.target.value)} />
+            <input value={form.r2Bucket || ""} onChange={(e) => set("r2Bucket", e.target.value)} placeholder="例如 hexo-images" />
+            <Hint>R2 存储桶名称，需已创建，且 API 令牌对该桶有写入权限。</Hint>
           </label>
           <label>
             Access Key ID
-            <input value={form.r2AccessKeyId || ""} onChange={(e) => set("r2AccessKeyId", e.target.value)} autoComplete="off" />
+            <input
+              value={form.r2AccessKeyId || ""}
+              onChange={(e) => set("r2AccessKeyId", e.target.value)}
+              autoComplete="off"
+              placeholder="R2 API 令牌的 Access Key"
+            />
+            <Hint>R2 的 S3 兼容 Access Key ID，不是 Cloudflare 登录邮箱。建议权限为该桶 Object Read & Write。</Hint>
           </label>
           <label>
             Secret Access Key
@@ -125,6 +280,7 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               placeholder="留空则不修改已保存密钥"
               autoComplete="new-password"
             />
+            <Hint>与 Access Key 成对出现，只显示一次。已经保存过的密钥可留空，不会被清空。</Hint>
           </label>
           <label className="span-2">
             公开访问 URL
@@ -133,18 +289,26 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               onChange={(e) => set("r2PublicUrl", e.target.value)}
               placeholder="https://img.example.com 或 https://pub-xxxx.r2.dev"
             />
+            <Hint>
+              浏览器能打开的图片前缀，不要末尾斜杠。可用自定义域名，或 R2 桶的公开 `r2.dev` 地址。插入 Markdown 的链接为「该地址 + 对象键」。
+            </Hint>
           </label>
-          <label>
+          <label className="span-2">
             对象键前缀
             <input value={form.r2KeyPrefix || ""} onChange={(e) => set("r2KeyPrefix", e.target.value)} placeholder="hexo" />
+            <Hint>对象在桶里的路径前缀，默认 `hexo`。实际上传键类似 `hexo/2026/08/20/abc123-封面.png`。</Hint>
           </label>
         </div>
 
         <h3>SSH / SFTP</h3>
+        <p className="section-hint">
+          用于拉取、推送 Markdown，以及在服务器上执行 `hexo generate` / `hexo deploy`。密码和私钥二选一即可，推荐私钥。
+        </p>
         <div className="modal-grid">
           <label>
             主机
-            <input value={form.sshHost || ""} onChange={(e) => set("sshHost", e.target.value)} placeholder="example.com" />
+            <input value={form.sshHost || ""} onChange={(e) => set("sshHost", e.target.value)} placeholder="example.com 或 1.2.3.4" />
+            <Hint>SSH 服务器的域名或 IP，不要带 `ssh://` 或端口号。</Hint>
           </label>
           <label>
             端口
@@ -153,10 +317,12 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               value={form.sshPort ?? 22}
               onChange={(e) => set("sshPort", Number(e.target.value) || 22)}
             />
+            <Hint>SSH 端口，一般是 `22`。云厂商改过安全组端口时填实际端口。</Hint>
           </label>
           <label>
             用户名
             <input value={form.sshUser || ""} onChange={(e) => set("sshUser", e.target.value)} placeholder="ubuntu" />
+            <Hint>登录用户，常见如 `ubuntu`、`root`、`debian`。需对该远程博客目录有读写权限。</Hint>
           </label>
           <label>
             密码
@@ -167,6 +333,7 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               placeholder="使用私钥时可留空"
               autoComplete="new-password"
             />
+            <Hint>密码登录时填写。已改用私钥可留空。已保存的密码留空表示不修改。</Hint>
           </label>
           <label className="span-2">
             私钥文件
@@ -188,6 +355,7 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
                 选择
               </button>
             </div>
+            <Hint>本机 OpenSSH 私钥路径，如 `id_ed25519` 或 `id_rsa`（不要选 `.pub` 公钥）。PuTTY 的 `.ppk` 需先转换成 OpenSSH 格式。</Hint>
           </label>
           <label>
             私钥口令
@@ -198,6 +366,7 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               placeholder="无私钥口令可留空"
               autoComplete="new-password"
             />
+            <Hint>创建密钥时设置的 passphrase。没有加密过私钥就留空。已保存的口令留空表示不修改。</Hint>
           </label>
           <label>
             远程 Hexo 根目录
@@ -206,19 +375,34 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
               onChange={(e) => set("remoteHexoRoot", e.target.value)}
               placeholder="/home/ubuntu/blog"
             />
+            <Hint>服务器上的博客根目录绝对路径，需含 `_config.yml`。同步范围是该目录下的 `source/_posts` 与 `source/_drafts`。</Hint>
           </label>
           <label className="span-2">
             登录初始化
-            <input value={form.sshInitCmd || ""} onChange={(e) => set("sshInitCmd", e.target.value)} />
-            <small>用于加载 nvm / node。在 cd 到博客目录之前执行。</small>
+            <input
+              value={form.sshInitCmd || ""}
+              onChange={(e) => set("sshInitCmd", e.target.value)}
+              placeholder="source ~/.nvm/nvm.sh; source ~/.bashrc"
+            />
+            <Hint>连上 SSH 后、进入博客目录前执行，用来加载 nvm / node。多条命令用 `;` 连接。不需要可留空。</Hint>
           </label>
           <label>
             生成命令
-            <input value={form.sshGenerateCmd || ""} onChange={(e) => set("sshGenerateCmd", e.target.value)} />
+            <input
+              value={form.sshGenerateCmd || ""}
+              onChange={(e) => set("sshGenerateCmd", e.target.value)}
+              placeholder="npx hexo generate"
+            />
+            <Hint>在远程博客根目录执行，用于「Hexo 生成」。默认 `npx hexo generate`，也可写成 `hexo g`。</Hint>
           </label>
           <label>
             部署命令
-            <input value={form.sshDeployCmd || ""} onChange={(e) => set("sshDeployCmd", e.target.value)} />
+            <input
+              value={form.sshDeployCmd || ""}
+              onChange={(e) => set("sshDeployCmd", e.target.value)}
+              placeholder="npx hexo deploy"
+            />
+            <Hint>用于「Hexo 部署」。默认 `npx hexo deploy`。若想一次生成并部署，也可填 `npx hexo generate --deploy`。</Hint>
           </label>
         </div>
         <label className="check">
@@ -227,7 +411,10 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
             checked={Boolean(form.autoUploadOnSave)}
             onChange={(e) => set("autoUploadOnSave", e.target.checked)}
           />
-          保存文章后自动 SFTP 上传当前 Markdown（及资源目录）
+          <span>
+            保存文章后自动 SFTP 上传
+            <Hint>保存当前打开的文章时，自动把该 Markdown 和同名资源目录推到服务器。需先填好 SSH，并保持连接或允许自动连接。</Hint>
+          </span>
         </label>
 
         <footer>
@@ -235,7 +422,18 @@ export function SettingsModal({ open, settings, saving, version, onClose, onSave
           <button className="btn ghost" type="button" onClick={onClose} disabled={saving}>
             取消
           </button>
-          <button className="btn primary" type="button" disabled={saving} onClick={() => onSave(form)}>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={saving}
+            onClick={() =>
+              onSave(form, {
+                defaultId: tpl.defaultId,
+                items: tpl.items,
+                scaffolds: templates?.scaffolds || [],
+              })
+            }
+          >
             {saving ? "保存中…" : "保存设置"}
           </button>
         </footer>
