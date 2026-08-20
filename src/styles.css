@@ -1,20 +1,26 @@
 :root {
-  --bg: #0f0e0c;
-  --bg-raise: #171512;
-  --bg-panel: #1c1915;
-  --line: rgba(232, 220, 196, 0.1);
-  --text: #ece6d8;
-  --muted: #8f8778;
-  --faint: #5f584c;
-  --accent: #d4a574;
+  --bg: #100e0c;
+  --bg-raise: #161310;
+  --bg-panel: #1b1814;
+  --bg-input: #12100e;
+  --line: rgba(236, 224, 196, 0.11);
+  --line-strong: rgba(236, 224, 196, 0.2);
+  --text: #f3ede1;
+  --muted: #9a9284;
+  --faint: #6a6358;
+  --accent: #d7ab78;
   --accent-2: #8fa8c4;
   --danger: #d47a6a;
   --ok: #8fba84;
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
-  --ui: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --serif: "Source Serif 4", "Noto Serif SC", "Songti SC", serif;
-  --mono: "IBM Plex Mono", "Cascadia Code", ui-monospace, monospace;
-  --display: "Syne", var(--ui);
+  --shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+  --radius: 10px;
+  --radius-sm: 7px;
+  --ease: 160ms ease;
+  --ui: "Inter", "Noto Sans SC", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  --serif: "Source Serif 4", "Noto Serif SC", "Songti SC", "STSong", serif;
+  --preview: "LXGW WenKai", "Source Serif 4", "Noto Serif SC", "Songti SC", serif;
+  --mono: "JetBrains Mono", "IBM Plex Mono", "Cascadia Code", "Sarasa Gothic SC", Consolas, monospace;
+  --display: "Fraunces", "Noto Serif SC", "Songti SC", var(--serif);
 }
 
 * {
@@ -28,24 +34,46 @@ body,
   margin: 0;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--ui);
+  font-size: 13.5px;
+  letter-spacing: 0.01em;
   overflow: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button,
-input {
+input,
+textarea {
   font-family: inherit;
+}
+
+::selection {
+  background: rgba(215, 171, 120, 0.34);
+  color: #fff8ee;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(215, 171, 120, 0.55);
+  outline-offset: 2px;
 }
 
 .shell {
   height: 100%;
   display: grid;
-  grid-template-rows: 56px 1fr 28px;
+  grid-template-rows: 58px 1fr 30px;
   background:
-    radial-gradient(1200px 500px at 10% -10%, rgba(212, 165, 116, 0.08), transparent 55%),
+    radial-gradient(1100px 480px at 8% -12%, rgba(215, 171, 120, 0.1), transparent 58%),
+    radial-gradient(900px 420px at 100% 0%, rgba(143, 168, 196, 0.05), transparent 46%),
     var(--bg);
 }
 
@@ -56,8 +84,8 @@ input {
   gap: 16px;
   padding: 0 14px 0 16px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg-raise) 88%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-raise) 90%, transparent);
+  backdrop-filter: blur(16px);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -91,28 +119,33 @@ body.platform-linux .titlebar {
   display: block;
   font-family: var(--display);
   font-weight: 700;
-  letter-spacing: 0.02em;
-  font-size: 15px;
+  letter-spacing: -0.02em;
+  font-size: 16px;
+  line-height: 1.15;
 }
 
 .brand small {
   display: block;
   color: var(--muted);
   font-size: 11px;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 220px;
+  margin-top: 2px;
 }
 
 .mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, #e8c49a 0%, #b07d4a 52%, #3d2a1a 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #e8c49a 0%, #b07d4a 52%, #3d2a1a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 6px 14px rgba(61, 42, 26, 0.28);
   position: relative;
+  flex-shrink: 0;
 }
 
 .mark::after {
@@ -122,18 +155,33 @@ body.platform-linux .titlebar {
   display: grid;
   place-items: center;
   font-family: var(--display);
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   color: #1a120c;
 }
 
 .title-center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
   text-align: center;
   font-size: 13px;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(215, 171, 120, 0.16);
+  flex-shrink: 0;
 }
 
 .title-actions {
@@ -147,11 +195,17 @@ body.platform-linux .titlebar {
   align-items: center;
   gap: 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  padding: 7px 13px;
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
+  transition:
+    background var(--ease),
+    border-color var(--ease),
+    color var(--ease),
+    transform var(--ease);
 }
 
 .btn:disabled {
@@ -165,30 +219,36 @@ body.platform-linux .titlebar {
   font-weight: 600;
 }
 
+.btn.primary:hover:not(:disabled) {
+  background: #e0b88a;
+}
+
 .btn.ghost {
   background: transparent;
-  border-color: var(--line);
+  border-color: var(--line-strong);
   color: var(--text);
 }
 
-.btn.ghost:hover {
-  background: rgba(255, 255, 255, 0.04);
+.btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .icon-btn {
   width: 34px;
   height: 34px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition: background var(--ease), color var(--ease);
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--accent);
 }
 
 .body {
@@ -210,11 +270,16 @@ body.platform-linux .titlebar {
   align-items: center;
   gap: 8px;
   margin: 12px 12px 8px;
-  padding: 8px 10px;
+  padding: 8px 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--muted);
-  background: var(--bg);
+  background: var(--bg-input);
+  transition: border-color var(--ease);
+}
+
+.sidebar-search:focus-within {
+  border-color: rgba(215, 171, 120, 0.45);
 }
 
 .sidebar-search input {
@@ -229,7 +294,7 @@ body.platform-linux .titlebar {
 .sidebar-tabs {
   display: flex;
   gap: 4px;
-  padding: 0 12px 8px;
+  padding: 0 12px 10px;
 }
 
 .sidebar-tabs button,
@@ -238,16 +303,24 @@ body.platform-linux .titlebar {
   border: 0;
   background: transparent;
   color: var(--muted);
-  padding: 6px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
+  font-weight: 500;
+  transition: background var(--ease), color var(--ease);
 }
 
 .sidebar-tabs button.on,
 .choice-row button.on {
-  background: rgba(212, 165, 116, 0.14);
+  background: rgba(215, 171, 120, 0.16);
   color: var(--accent);
+}
+
+.sidebar-tabs button:hover:not(.on),
+.choice-row button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
 }
 
 .post-list {
@@ -266,14 +339,15 @@ body.platform-linux .titlebar {
   border: 0;
   background: transparent;
   color: inherit;
-  padding: 9px 8px;
-  border-radius: 8px;
+  padding: 10px 8px;
+  border-radius: var(--radius);
   cursor: pointer;
+  transition: background var(--ease);
 }
 
 .post-item:hover,
 .post-item.active {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 248, 236, 0.045);
 }
 
 .post-item.active {
@@ -284,12 +358,13 @@ body.platform-linux .titlebar {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .post-item-body strong {
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -298,6 +373,7 @@ body.platform-linux .titlebar {
 .post-item-body small {
   color: var(--faint);
   font-size: 11px;
+  font-family: var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -307,6 +383,7 @@ body.platform-linux .titlebar {
   display: flex;
   align-items: center;
   opacity: 0;
+  transition: opacity var(--ease);
 }
 
 .post-act {
@@ -350,26 +427,34 @@ body.platform-linux .titlebar {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
 }
 
 .toolbar button {
-  width: 30px;
-  height: 28px;
+  width: 32px;
+  height: 30px;
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: grid;
   place-items: center;
+  transition: background var(--ease), color var(--ease);
 }
 
 .toolbar button:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.055);
   color: var(--text);
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: var(--line-strong);
 }
 
 .toolbar-note {
@@ -391,7 +476,7 @@ body.platform-linux .titlebar {
 }
 
 .editor-pane {
-  background: #141210;
+  background: #13110f;
 }
 
 .editor-host,
@@ -400,32 +485,31 @@ body.platform-linux .titlebar {
 }
 
 .divider {
-  width: 7px;
+  width: 8px;
   cursor: col-resize;
-  background:
-    linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat;
+  background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat;
 }
 
 .divider:hover {
-  background:
-    linear-gradient(var(--accent), var(--accent)) center / 1px 100% no-repeat;
+  background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 }
 
 .preview-pane {
   overflow: auto;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 120px),
-    #191714;
+    linear-gradient(180deg, rgba(255, 248, 236, 0.025), transparent 140px),
+    #181512;
 }
 
 .preview-article {
   max-width: 720px;
   margin: 0 auto;
-  padding: 28px 36px 80px;
-  font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1.8;
-  color: #ebe4d6;
+  padding: 36px 40px 88px;
+  font-family: var(--preview);
+  font-size: 18px;
+  line-height: 1.9;
+  color: #f0e8d8;
+  font-weight: 400;
 }
 
 .preview-article h1,
@@ -434,81 +518,122 @@ body.platform-linux .titlebar {
 .preview-article h4 {
   font-family: var(--display);
   font-weight: 700;
-  line-height: 1.25;
-  color: #f6efe2;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  color: #fff8ee;
 }
 
 .preview-article h1 {
-  font-size: 2rem;
-  margin: 0 0 1rem;
+  font-size: 2.15rem;
+  margin: 0 0 1.1rem;
 }
 
 .preview-article h2 {
-  font-size: 1.45rem;
-  margin: 2rem 0 0.8rem;
-  padding-bottom: 0.35rem;
+  font-size: 1.48rem;
+  margin: 2.2rem 0 0.85rem;
+  padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--line);
 }
 
+.preview-article h3 {
+  font-size: 1.2rem;
+  margin: 1.7rem 0 0.6rem;
+}
+
+.preview-article h4 {
+  font-size: 1.05rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
 .preview-article p {
-  margin: 0.9rem 0;
+  margin: 0.95rem 0;
 }
 
 .preview-article a {
   color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.preview-article a:hover {
+  color: #e0b88a;
 }
 
 .preview-article img {
   max-width: 100%;
-  border-radius: 10px;
-  margin: 12px 0;
+  border-radius: 12px;
+  margin: 14px 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
 .preview-article blockquote {
-  margin: 1rem 0;
-  padding: 0.2rem 0 0.2rem 1rem;
+  margin: 1.15rem 0;
+  padding: 0.15rem 0 0.15rem 1.1rem;
   border-left: 3px solid var(--accent);
   color: var(--muted);
+  font-style: italic;
+}
+
+.preview-article hr {
+  border: 0;
+  height: 1px;
+  margin: 2rem 0;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
 }
 
 .preview-article code {
   font-family: var(--mono);
-  font-size: 0.86em;
+  font-size: 0.82em;
   background: rgba(255, 255, 255, 0.06);
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
 }
 
 .preview-article pre {
   background: #100e0c;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 16px 18px;
   overflow: auto;
 }
 
 .preview-article pre code {
   background: none;
   padding: 0;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.65;
 }
 
 .preview-article table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 16px;
+  margin: 1rem 0;
 }
 
 .preview-article th,
 .preview-article td {
   border: 1px solid var(--line);
-  padding: 8px 10px;
+  padding: 9px 12px;
+}
+
+.preview-article th {
+  background: rgba(255, 248, 236, 0.04);
+  font-weight: 600;
 }
 
 .preview-article ul,
 .preview-article ol {
-  padding-left: 1.3rem;
+  padding-left: 1.4rem;
+}
+
+.preview-article li {
+  margin: 0.28rem 0;
+}
+
+.preview-article li::marker {
+  color: var(--accent);
 }
 
 .preview-empty {
@@ -518,38 +643,48 @@ body.platform-linux .titlebar {
   text-align: center;
   color: var(--muted);
   gap: 6px;
+  font-family: var(--preview);
 }
 
 .preview-empty span {
   color: var(--faint);
   font-size: 13px;
+  font-family: var(--ui);
 }
 
 .empty-workspace {
   flex: 1;
   display: grid;
   place-content: center;
+  justify-items: center;
   text-align: center;
   padding: 40px;
 }
 
+.empty-mark {
+  margin-bottom: 18px;
+}
+
 .empty-workspace h1 {
   font-family: var(--display);
-  margin: 0 0 8px;
-  font-size: 36px;
+  margin: 0 0 10px;
+  font-size: 38px;
+  letter-spacing: -0.03em;
+  font-weight: 700;
 }
 
 .empty-workspace p {
-  max-width: 460px;
+  max-width: 440px;
   color: var(--muted);
-  line-height: 1.7;
+  line-height: 1.75;
+  font-size: 14.5px;
 }
 
 .empty-actions {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
 .statusbar {
@@ -557,7 +692,8 @@ body.platform-linux .titlebar {
   align-items: center;
   gap: 14px;
   padding: 0 14px;
-  font-size: 11px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
   border-top: 1px solid var(--line);
   background: var(--bg-raise);
@@ -611,6 +747,8 @@ body.platform-linux .titlebar {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .status-link.path-link:hover:not(:disabled) {
@@ -621,7 +759,7 @@ body.platform-linux .titlebar {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 12px 8px;
+  padding: 6px 12px 8px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -632,13 +770,15 @@ body.platform-linux .titlebar {
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   font-size: 12px;
+  font-weight: 500;
+  transition: background var(--ease), color var(--ease);
 }
 
 .remote-bar button:hover:not(:disabled) {
@@ -660,6 +800,7 @@ body.platform-linux .titlebar {
   height: 7px;
   border-radius: 50%;
   background: var(--faint);
+  margin-right: 2px;
 }
 
 .ssh-dot.on {
@@ -673,6 +814,7 @@ body.platform-linux .titlebar {
   color: var(--accent);
   cursor: pointer;
   font-size: 12px;
+  font-weight: 500;
 }
 
 .remote-log {
@@ -730,7 +872,8 @@ body.platform-linux .titlebar {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 7, 6, 0.62);
+  background: rgba(8, 7, 6, 0.66);
+  backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
   z-index: 20;
@@ -739,10 +882,10 @@ body.platform-linux .titlebar {
 .modal {
   width: min(640px, calc(100vw - 32px));
   background: #1f1b16;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 22px 22px 16px;
+  padding: 24px 24px 18px;
 }
 
 .modal.compact {
@@ -756,23 +899,26 @@ body.platform-linux .titlebar {
 }
 
 .modal h3 {
-  margin: 8px 0 10px;
+  margin: 10px 0 12px;
   font-family: var(--display);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--accent);
 }
 
 .modal header h2 {
   margin: 0;
   font-family: var(--display);
-  font-size: 22px;
+  font-size: 24px;
+  letter-spacing: -0.03em;
 }
 
 .modal header p {
-  margin: 4px 0 16px;
+  margin: 6px 0 18px;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.65;
 }
 
 .rename-preview {
@@ -797,17 +943,18 @@ body.platform-linux .titlebar {
 }
 
 .modal input {
-  height: 36px;
-  border-radius: 8px;
+  height: 38px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  background: #141210;
+  background: var(--bg-input);
   color: var(--text);
-  padding: 0 10px;
+  padding: 0 11px;
   font-size: 13px;
 }
 
 .modal input:focus {
-  outline: 1px solid rgba(212, 165, 116, 0.45);
+  outline: 1px solid rgba(215, 171, 120, 0.5);
+  border-color: rgba(215, 171, 120, 0.35);
 }
 
 .path-row {
@@ -821,7 +968,7 @@ body.platform-linux .titlebar {
 }
 
 .path-row .btn {
-  height: 36px;
+  height: 38px;
   white-space: nowrap;
   -webkit-app-region: no-drag;
 }
@@ -866,6 +1013,7 @@ body.platform-linux .titlebar {
   align-self: center;
   color: var(--muted);
   font-size: 12px;
+  font-family: var(--mono);
 }
 
 .about-modal {
@@ -878,7 +1026,7 @@ body.platform-linux .titlebar {
 }
 
 .about-modal header h2 {
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .about-modal header p {
@@ -916,11 +1064,11 @@ body.platform-linux .titlebar {
 .toast {
   position: fixed;
   right: 18px;
-  bottom: 42px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  bottom: 44px;
+  padding: 11px 15px;
+  border-radius: 12px;
   background: #2a241c;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   box-shadow: var(--shadow);
   z-index: 30;
   font-size: 13px;
@@ -937,7 +1085,7 @@ body.platform-linux .titlebar {
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-title.class_ {
-  color: #d4a574;
+  color: #d7ab78;
 }
 
 .hljs-string,
@@ -966,13 +1114,21 @@ body.platform-linux .titlebar {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a342c;
-  border-radius: 10px;
+  background: #3f3830;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52493e;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-track {
@@ -984,6 +1140,6 @@ body.platform-linux .titlebar {
     grid-template-columns: 220px 1fr;
   }
   .preview-article {
-    padding: 20px 18px 60px;
+    padding: 22px 18px 64px;
   }
 }

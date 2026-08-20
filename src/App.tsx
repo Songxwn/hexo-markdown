@@ -369,7 +369,7 @@ export default function App() {
         </div>
         <div className="title-center" title={path || ""}>
           {path ? title : "未打开文章"}
-          {dirty ? " ·" : ""}
+          {dirty ? <span className="dirty-dot" title="未保存" /> : null}
         </div>
         <div className="title-actions">
           <button className="btn ghost" onClick={() => setNewOpen(true)}>
@@ -421,6 +421,7 @@ export default function App() {
             <button onClick={() => editorRef.current?.wrapSelection("- ", "")} title="列表">
               <List size={15} />
             </button>
+            <span className="toolbar-sep" />
             <button onClick={pickImage} title="插入图片并上传">
               <ImagePlus size={15} />
             </button>
@@ -462,6 +463,7 @@ export default function App() {
             </div>
           ) : (
             <div className="empty-workspace">
+              <span className="mark empty-mark" aria-hidden />
               <h1>从一篇文章开始</h1>
               <p>选择左侧列表，或新建 Markdown。粘贴截图会上传到 Cloudflare R2，并插入公开 URL。</p>
               <div className="empty-actions">
