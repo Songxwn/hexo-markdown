@@ -26,7 +26,8 @@
     "appId": "app.hexo.markdown",
     "productName": "Hexo Markdown",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
@@ -41,7 +42,18 @@
       "**/*.node",
       "node_modules/ssh2/**"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -50,10 +62,12 @@
       ]
     },
     "mac": {
+      "icon": "build/icon.png",
       "target": ["dmg"],
       "category": "public.app-category.developer-tools"
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": ["AppImage"],
       "category": "Office",
       "maintainer": "Hexo Markdown"
@@ -61,6 +75,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": {

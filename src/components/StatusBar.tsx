@@ -9,8 +9,10 @@ type Props = {
   r2Configured: boolean;
   ssh: SshStatus;
   uploadHint: string | null;
+  version: string;
   onToggleLog: () => void;
   onRename: () => void;
+  onAbout: () => void;
 };
 
 export function StatusBar({
@@ -21,8 +23,10 @@ export function StatusBar({
   r2Configured,
   ssh,
   uploadHint,
+  version,
   onToggleLog,
   onRename,
+  onAbout,
 }: Props) {
   return (
     <footer className="statusbar">
@@ -49,6 +53,11 @@ export function StatusBar({
         {r2Configured ? <Cloud size={13} /> : <HardDrive size={13} />}
         {r2Configured ? "R2 已配置" : "未配置 R2"}
       </span>
+      {version ? (
+        <button type="button" className="status-link" onClick={onAbout} title="关于">
+          v{version}
+        </button>
+      ) : null}
     </footer>
   );
 }

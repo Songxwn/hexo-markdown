@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type {
+  AppInfo,
   AppSettings,
   MenuAction,
   PostFolder,
@@ -13,6 +14,7 @@ import type {
 
 type HexoDesktopAPI = {
   platform: NodeJS.Platform;
+  appInfo: () => Promise<AppInfo>;
   settings: () => Promise<AppSettings>;
   saveSettings: (body: Partial<AppSettings>) => Promise<AppSettings>;
   posts: () => Promise<PostSummary[]>;

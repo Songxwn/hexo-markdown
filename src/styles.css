@@ -861,6 +861,48 @@ body.platform-linux .titlebar {
   margin-top: 8px;
 }
 
+.modal-version {
+  margin-right: auto;
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.about-modal {
+  text-align: center;
+}
+
+.about-mark {
+  display: block;
+  margin: 4px auto 14px;
+}
+
+.about-modal header h2 {
+  font-size: 20px;
+}
+
+.about-modal header p {
+  margin-bottom: 10px;
+}
+
+.about-version {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.about-meta {
+  margin: 0 0 18px;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.about-modal footer {
+  justify-content: center;
+}
+
 .choice-row {
   display: flex;
   gap: 8px;

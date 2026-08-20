@@ -5,6 +5,7 @@ export type MenuAction =
   | "save"
   | "rename"
   | "settings"
+  | "about"
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"
@@ -16,6 +17,7 @@ export type MenuAction =
 
 const api = {
   platform: process.platform as NodeJS.Platform,
+  appInfo: () => ipcRenderer.invoke("app:info"),
   settings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (body: unknown) => ipcRenderer.invoke("settings:save", body),
   posts: () => ipcRenderer.invoke("posts:list"),

@@ -1,4 +1,5 @@
 import type {
+  AppInfo,
   AppSettings,
   MenuAction,
   PostFolder,
@@ -17,6 +18,10 @@ function desktop() {
 }
 
 export const api = {
+  appInfo(): Promise<AppInfo> {
+    return desktop().appInfo();
+  },
+
   settings(): Promise<AppSettings> {
     return desktop().settings();
   },

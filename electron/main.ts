@@ -54,6 +54,18 @@ protocol.registerSchemesAsPrivileged([
 const isMac = process.platform === "darwin";
 const isWin = process.platform === "win32";
 
+function resolveAppIcon(): string | undefined {
+  const preferred = isWin ? ["icon.ico", "icon.png"] : ["icon.png", "icon.ico"];
+  const dirs = [process.resourcesPath, join(__dirname, "../build")];
+  for (const dir of dirs) {
+    for (const name of preferred) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
+
 let mainWindow: BrowserWindow | null = null;
 let dirty = false;
 let quitting = false;
@@ -88,7 +100,7 @@ function createMenu(): void {
           {
             label: app.name,
             submenu: [
-              { role: "about", label: "关于 Hexo Markdown" },
+              { label: "关于 Hexo Markdown", click: () => sendMenu("about") },
               { type: "separator" },
               { label: "设置…", accelerator: "Cmd+,", click: () => sendMenu("settings") },
               { type: "separator" },
@@ -161,12 +173,25 @@ function createMenu(): void {
         { role: "close", label: "关闭" },
       ],
     },
+    {
+      label: "帮助",
+      role: "help",
+      submenu: [
+        { label: "关于 Hexo Markdown", click: () => sendMenu("about") },
+      ],
+    },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function registerIpc(): void {
+  handle("app:info", () => ({
+    name: app.getName(),
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+  }));
   handle("settings:get", () => publicConfig());
   handle("settings:save", (body) => updateSettings((body || {}) as Partial<AppConfig>));
   handle("posts:list", () => getPosts());
@@ -276,6 +301,7 @@ async function createWindow(): Promise<void> {
     minHeight: 640,
     show: false,
     backgroundColor: "#0f0e0c",
+    icon: resolveAppIcon(),
     ...(isMac
       ? {
           titleBarStyle: "hiddenInset" as const,
@@ -355,6 +381,9 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     app.setName("Hexo Markdown");
+    if (isWin) {
+      app.setAppUserModelId("app.hexo.markdown");
+    }
     app.setAboutPanelOptions({
       applicationName: "Hexo Markdown",
       applicationVersion: app.getVersion(),

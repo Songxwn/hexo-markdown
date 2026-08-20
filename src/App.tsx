@@ -3,6 +3,7 @@ import {
   Code,
   Heading,
   ImagePlus,
+  Info,
   Italic,
   Link,
   List,
@@ -12,6 +13,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AboutModal } from "./components/AboutModal";
 import { EditorPane, type EditorHandle } from "./components/EditorPane";
 import { NewPostModal } from "./components/NewPostModal";
 import { Preview } from "./components/Preview";
@@ -23,7 +25,7 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { api } from "./lib/api";
 import { countWords, imageFileName, parseTitle } from "./lib/markdown";
-import type { AppSettings, PostFolder, PostSummary, SshLogEvent, SshStatus } from "./lib/types";
+import type { AppInfo, AppSettings, PostFolder, PostSummary, SshLogEvent, SshStatus } from "./lib/types";
 
 type Toast = { kind: "ok" | "err"; text: string };
 
@@ -46,6 +48,8 @@ export default function App() {
   const [ssh, setSsh] = useState<SshStatus>({ connected: false, host: "", user: "", busy: false });
   const [sshLogs, setSshLogs] = useState<SshLogEvent[]>([]);
   const [logOpen, setLogOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   const dirty = content !== saved;
   const words = useMemo(() => countWords(content), [content]);
@@ -75,8 +79,12 @@ export default function App() {
 
   const boot = useCallback(async () => {
     try {
-      const next = await api.settings();
+      const [next, info] = await Promise.all([
+        api.settings(),
+        api.appInfo().catch(() => null),
+      ]);
       setSettings(next);
+      if (info) setAppInfo(info);
       try {
         setSsh(await api.sshStatus());
       } catch {
@@ -300,6 +308,7 @@ export default function App() {
           openRename(path);
         }
         if (action === "settings") setSettingsOpen(true);
+        if (action === "about") setAboutOpen(true);
         if (action === "ssh-connect") void runRemote("已连接 SSH", () => api.sshConnect());
         if (action === "ssh-disconnect") void runRemote("已断开 SSH", () => api.sshDisconnect());
         if (action === "ssh-pull") void runRemote("拉取完成", () => api.sshPull());
@@ -370,6 +379,9 @@ export default function App() {
           <button className="btn primary" onClick={() => void savePost()} disabled={savingPost || !path}>
             <Save size={15} />
             {savingPost ? "保存中" : "保存"}
+          </button>
+          <button className="icon-btn" title="关于" onClick={() => setAboutOpen(true)}>
+            <Info size={16} />
           </button>
           <button className="icon-btn" title="设置" onClick={() => setSettingsOpen(true)}>
             <Settings size={16} />
@@ -474,6 +486,7 @@ export default function App() {
         r2Configured={Boolean(settings?.r2Configured)}
         ssh={ssh}
         uploadHint={uploadHint}
+        version={appInfo?.version || ""}
         onToggleLog={() => setLogOpen((open) => !open)}
         onRename={() => {
           if (!path) {
@@ -482,12 +495,14 @@ export default function App() {
           }
           openRename(path);
         }}
+        onAbout={() => setAboutOpen(true)}
       />
 
       <SettingsModal
         open={settingsOpen}
         settings={settings}
         saving={savingSettings}
+        version={appInfo?.version}
         onClose={() => setSettingsOpen(false)}
         onSave={saveSettings}
       />
@@ -496,6 +511,14 @@ export default function App() {
         target={renameTarget}
         onClose={() => setRenameTarget(null)}
         onRename={renamePost}
+      />
+      <AboutModal
+        open={aboutOpen}
+        name={appInfo?.name || "Hexo Markdown"}
+        version={appInfo?.version || ""}
+        electron={appInfo?.electron || ""}
+        chrome={appInfo?.chrome || ""}
+        onClose={() => setAboutOpen(false)}
       />
 
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}

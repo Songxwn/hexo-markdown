@@ -7,6 +7,7 @@ type Props = {
   open: boolean;
   settings: AppSettings | null;
   saving: boolean;
+  version?: string;
   onClose: () => void;
   onSave: (patch: Partial<AppSettings>) => Promise<void>;
 };
@@ -32,7 +33,7 @@ const empty: Partial<AppSettings> = {
   autoUploadOnSave: false,
 };
 
-export function SettingsModal({ open, settings, saving, onClose, onSave }: Props) {
+export function SettingsModal({ open, settings, saving, version, onClose, onSave }: Props) {
   const [form, setForm] = useState(empty);
 
   useEffect(() => {
@@ -230,6 +231,7 @@ export function SettingsModal({ open, settings, saving, onClose, onSave }: Props
         </label>
 
         <footer>
+          {version ? <span className="modal-version">版本 {version}</span> : <span />}
           <button className="btn ghost" type="button" onClick={onClose} disabled={saving}>
             取消
           </button>

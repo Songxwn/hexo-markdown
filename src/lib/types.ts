@@ -58,11 +58,19 @@ export type SyncResult = {
   dirs: number;
 };
 
+export type AppInfo = {
+  name: string;
+  version: string;
+  electron: string;
+  chrome: string;
+};
+
 export type MenuAction =
   | "new"
   | "save"
   | "rename"
   | "settings"
+  | "about"
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"
