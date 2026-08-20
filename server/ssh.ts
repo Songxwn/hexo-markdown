@@ -13,6 +13,9 @@ type StatusFn = () => void;
 
 let client: Client | null = null;
 let connecting: Promise<Client> | null = null;
+let sftpSession: SFTPWrapper | null = null;
+let sftpOpening: Promise<SFTPWrapper> | null = null;
+let recovering: Promise<void> | null = null;
 let log: LogFn = () => undefined;
 let onStatus: StatusFn = () => undefined;
 let busyCount = 0;
@@ -121,17 +124,50 @@ function buildConnectConfig(): ConnectConfig {
   return auth;
 }
 
+function dropSftp(sftp?: SFTPWrapper | null): void {
+  if (sftp && sftpSession && sftpSession !== sftp) return;
+  const current = sftpSession;
+  sftpSession = null;
+  sftpOpening = null;
+  if (current) {
+    try {
+      current.end();
+    } catch {
+      /* already closed */
+    }
+  }
+}
+
+function forgetClient(target?: Client | null): void {
+  if (target && client && client !== target) return;
+  client = null;
+  dropSftp();
+}
+
+function isRecoverableSftpError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return /channel open failure|not connected|no sftp|connection (lost|reset)|ECONNRESET|(^|\b)EOF\b/i.test(
+    msg,
+  );
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const err = error as { code?: number | string; message?: string };
+  if (err.code === 2 || err.code === "ENOENT") return true;
+  return /no such file|not a directory/i.test(String(err.message || error));
+}
+
 function attachClient(next: Client): void {
   next.on("close", () => {
     if (client === next) {
-      client = null;
+      forgetClient(next);
       emit("sys", "SSH 连接已断开");
       onStatus();
     }
   });
   next.on("end", () => {
     if (client === next) {
-      client = null;
+      forgetClient(next);
       onStatus();
     }
   });
@@ -172,7 +208,7 @@ export async function sshConnect(): Promise<{ host: string; user: string }> {
     onStatus();
     return { host: cfg.sshHost, user: cfg.sshUser };
   } catch (error) {
-    client = null;
+    forgetClient();
     throw new Error(error instanceof Error ? error.message : String(error));
   } finally {
     connecting = null;
@@ -181,8 +217,8 @@ export async function sshConnect(): Promise<{ host: string; user: string }> {
 
 export async function sshDisconnect(): Promise<void> {
   const current = client;
-  client = null;
   connecting = null;
+  forgetClient(current);
   if (current) {
     current.end();
     emit("sys", "已断开 SSH");
@@ -191,28 +227,104 @@ export async function sshDisconnect(): Promise<void> {
 }
 
 async function requireClient(): Promise<Client> {
+  if (recovering) await recovering;
   if (!client) await sshConnect();
   if (!client) throw new Error("SSH 未连接");
   return client;
 }
 
-async function openSftp(): Promise<SFTPWrapper> {
-  const conn = await requireClient();
-  return sftpFrom(conn);
-}
-
-async function openConnectedSftp(): Promise<SFTPWrapper> {
+async function recoverSession(): Promise<Client> {
+  if (recovering) {
+    await recovering;
+    if (!client) throw new Error("SSH 未连接");
+    return client;
+  }
+  recovering = (async () => {
+    const current = client;
+    connecting = null;
+    forgetClient(current);
+    if (current) {
+      try {
+        current.destroy();
+      } catch {
+        /* ignore */
+      }
+    }
+    await sshConnect();
+  })().finally(() => {
+    recovering = null;
+  });
+  await recovering;
   if (!client) throw new Error("SSH 未连接");
-  return sftpFrom(client);
+  return client;
 }
 
 function sftpFrom(conn: Client): Promise<SFTPWrapper> {
   return new Promise((resolvePromise, reject) => {
     conn.sftp((error, sftp) => {
-      if (error || !sftp) reject(error || new Error("无法打开 SFTP"));
-      else resolvePromise(sftp);
+      if (client !== conn) {
+        try {
+          sftp?.end();
+        } catch {
+          /* stale connection */
+        }
+        reject(error || new Error("SSH 未连接"));
+        return;
+      }
+      if (error || !sftp) {
+        reject(error || new Error("无法打开 SFTP"));
+        return;
+      }
+      sftpSession = sftp;
+      const drop = () => {
+        if (sftpSession === sftp) sftpSession = null;
+      };
+      sftp.on("close", drop);
+      sftp.on("end", drop);
+      sftp.on("error", drop);
+      resolvePromise(sftp);
     });
   });
+}
+
+async function sharedSftp(conn: Client): Promise<SFTPWrapper> {
+  if (sftpSession && client === conn) return sftpSession;
+  if (sftpSession) dropSftp();
+  if (sftpOpening) return sftpOpening;
+  const opening = sftpFrom(conn);
+  sftpOpening = opening;
+  try {
+    return await opening;
+  } finally {
+    if (sftpOpening === opening) sftpOpening = null;
+  }
+}
+
+async function openSftpSession(mustBeConnected: boolean): Promise<SFTPWrapper> {
+  if (recovering) await recovering;
+  if (mustBeConnected && !client) throw new Error("SSH 未连接");
+  const conn = mustBeConnected ? client : await requireClient();
+  if (!conn) throw new Error("SSH 未连接");
+  try {
+    return await sharedSftp(conn);
+  } catch (error) {
+    if (!isRecoverableSftpError(error)) throw error;
+    emit("sys", "SFTP 通道失效，正在重连…");
+    const next = await recoverSession();
+    return sharedSftp(next);
+  }
+}
+
+async function withSftp<T>(mustBeConnected: boolean, fn: (sftp: SFTPWrapper) => Promise<T>): Promise<T> {
+  try {
+    return await fn(await openSftpSession(mustBeConnected));
+  } catch (error) {
+    if (!isRecoverableSftpError(error)) throw error;
+    dropSftp();
+    emit("sys", "SFTP 通道失效，正在重连…");
+    await recoverSession();
+    return fn(await openSftpSession(mustBeConnected));
+  }
 }
 
 async function remoteStat(sftp: SFTPWrapper, path: string) {
@@ -223,8 +335,9 @@ async function remoteExists(sftp: SFTPWrapper, path: string): Promise<boolean> {
   try {
     await remoteStat(sftp, path);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (isNotFoundError(error)) return false;
+    throw error;
   }
 }
 
@@ -345,49 +458,51 @@ function collectLocalSyncFiles(hexoRoot: string, relFile?: string): string[] {
 
 export async function sshPull(hexoRoot: string): Promise<SyncResult> {
   if (!hexoRoot) throw new Error("请先设置本地 Hexo 根目录");
-  const sftp = await openSftp();
-  return withBusy("正在从服务器拉取 Markdown…", async () => {
-    const remoteFiles: string[] = [];
-    await walkRemote(sftp, remoteJoin("source/_posts"), "source/_posts", remoteFiles);
-    await walkRemote(sftp, remoteJoin("source/_drafts"), "source/_drafts", remoteFiles);
-    const wanted = remoteFiles.filter((rel) => {
-      if (rel.toLowerCase().endsWith(".md")) return true;
-      return remoteFiles.some((md) => md.toLowerCase().endsWith(".md") && rel.startsWith(md.replace(/\.md$/i, "/")));
-    });
-    let files = 0;
-    for (const rel of wanted) {
-      const remote = remoteJoin(rel);
-      const local = localJoin(hexoRoot, rel);
-      await downloadFile(sftp, remote, local);
-      files += 1;
-      emit("sys", `↓ ${rel}`);
-    }
-    emit("sys", `拉取完成，共 ${files} 个文件`);
-    return { files, dirs: 0 };
-  });
+  return withBusy("正在从服务器拉取 Markdown…", () =>
+    withSftp(false, async (sftp) => {
+      const remoteFiles: string[] = [];
+      await walkRemote(sftp, remoteJoin("source/_posts"), "source/_posts", remoteFiles);
+      await walkRemote(sftp, remoteJoin("source/_drafts"), "source/_drafts", remoteFiles);
+      const wanted = remoteFiles.filter((rel) => {
+        if (rel.toLowerCase().endsWith(".md")) return true;
+        return remoteFiles.some((md) => md.toLowerCase().endsWith(".md") && rel.startsWith(md.replace(/\.md$/i, "/")));
+      });
+      let files = 0;
+      for (const rel of wanted) {
+        const remote = remoteJoin(rel);
+        const local = localJoin(hexoRoot, rel);
+        await downloadFile(sftp, remote, local);
+        files += 1;
+        emit("sys", `↓ ${rel}`);
+      }
+      emit("sys", `拉取完成，共 ${files} 个文件`);
+      return { files, dirs: 0 };
+    }),
+  );
 }
 
 export async function sshPush(hexoRoot: string, relFile?: string): Promise<SyncResult> {
   if (!hexoRoot) throw new Error("请先设置本地 Hexo 根目录");
-  const sftp = await openSftp();
   const files = collectLocalSyncFiles(hexoRoot, relFile);
   if (!files.length) {
     emit("sys", "没有可推送的文件");
     return { files: 0, dirs: 0 };
   }
   const label = relFile ? `正在推送 ${relFile} …` : "正在推送全部文章到服务器…";
-  return withBusy(label, async () => {
-    let count = 0;
-    for (const rel of files) {
-      const local = join(resolve(hexoRoot), ...rel.split("/"));
-      if (!existsSync(local)) continue;
-      await uploadFile(sftp, local, remoteJoin(rel));
-      count += 1;
-      emit("sys", `↑ ${rel}`);
-    }
-    emit("sys", `推送完成，共 ${count} 个文件`);
-    return { files: count, dirs: 0 };
-  });
+  return withBusy(label, () =>
+    withSftp(false, async (sftp) => {
+      let count = 0;
+      for (const rel of files) {
+        const local = join(resolve(hexoRoot), ...rel.split("/"));
+        if (!existsSync(local)) continue;
+        await uploadFile(sftp, local, remoteJoin(rel));
+        count += 1;
+        emit("sys", `↑ ${rel}`);
+      }
+      emit("sys", `推送完成，共 ${count} 个文件`);
+      return { files: count, dirs: 0 };
+    }),
+  );
 }
 
 function assertRemotePost(relPath: string): string {
@@ -523,71 +638,75 @@ function parseRemoteSummary(rel: string, raw: string, mtime: number): PostSummar
 }
 
 export async function sshListRemotePosts(): Promise<PostSummary[]> {
-  const sftp = await openConnectedSftp();
-  const files: RemoteMd[] = [];
-  await walkRemoteMarkdown(sftp, remoteJoin("source/_posts"), "source/_posts", files);
-  const seen = new Set(files.map((file) => file.rel));
-  for (const key of [...remoteListCache.keys()]) {
-    if (!seen.has(key)) remoteListCache.delete(key);
-  }
-  const items = await mapPool(files, 6, async (file) => {
-    const cached = remoteListCache.get(file.rel);
-    if (cached && cached.mtime === file.mtime && cached.size === file.size) {
-      return {
-        path: file.rel,
-        name: file.rel.split("/").pop() || file.rel,
-        folder: "posts" as const,
-        title: cached.title,
-        date: cached.date,
-        mtime: file.mtime,
-        origin: "remote" as const,
-      };
+  return withSftp(true, async (sftp) => {
+    const files: RemoteMd[] = [];
+    await walkRemoteMarkdown(sftp, remoteJoin("source/_posts"), "source/_posts", files);
+    const seen = new Set(files.map((file) => file.rel));
+    for (const key of [...remoteListCache.keys()]) {
+      if (!seen.has(key)) remoteListCache.delete(key);
     }
-    const raw = (await readRemoteBuffer(sftp, file.abs)).toString("utf8");
-    const summary = parseRemoteSummary(file.rel, raw, file.mtime);
-    remoteListCache.set(file.rel, {
-      mtime: file.mtime,
-      size: file.size,
-      title: summary.title,
-      date: summary.date,
+    const items = await mapPool(files, 4, async (file) => {
+      const cached = remoteListCache.get(file.rel);
+      if (cached && cached.mtime === file.mtime && cached.size === file.size) {
+        return {
+          path: file.rel,
+          name: file.rel.split("/").pop() || file.rel,
+          folder: "posts" as const,
+          title: cached.title,
+          date: cached.date,
+          mtime: file.mtime,
+          origin: "remote" as const,
+        };
+      }
+      const raw = (await readRemoteBuffer(sftp, file.abs)).toString("utf8");
+      const summary = parseRemoteSummary(file.rel, raw, file.mtime);
+      remoteListCache.set(file.rel, {
+        mtime: file.mtime,
+        size: file.size,
+        title: summary.title,
+        date: summary.date,
+      });
+      return summary;
     });
-    return summary;
+    items.sort((a, b) => b.mtime - a.mtime);
+    return items;
   });
-  items.sort((a, b) => b.mtime - a.mtime);
-  return items;
 }
 
 export async function sshReadRemotePost(relPath: string): Promise<{ path: string; content: string }> {
   const rel = assertRemotePost(relPath);
-  const sftp = await openConnectedSftp();
-  const abs = remoteJoin(rel);
-  if (!(await remoteExists(sftp, abs))) {
-    throw new Error("远程文章不存在");
-  }
-  const content = (await readRemoteBuffer(sftp, abs)).toString("utf8").replace(/^\uFEFF/, "");
-  return { path: rel, content };
+  return withSftp(true, async (sftp) => {
+    const abs = remoteJoin(rel);
+    if (!(await remoteExists(sftp, abs))) {
+      throw new Error("远程文章不存在");
+    }
+    const content = (await readRemoteBuffer(sftp, abs)).toString("utf8").replace(/^\uFEFF/, "");
+    return { path: rel, content };
+  });
 }
 
 export async function sshWriteRemotePost(relPath: string, content: string): Promise<{ path: string }> {
   const rel = assertRemotePost(relPath);
-  const sftp = await openConnectedSftp();
-  return withBusy(`正在保存远程文章 ${rel} …`, async () => {
-    await writeRemoteBuffer(sftp, remoteJoin(rel), Buffer.from(content, "utf8"));
-    remoteListCache.delete(rel);
-    emit("sys", `已保存到服务器 ${rel}`);
-    return { path: rel };
-  });
+  return withBusy(`正在保存远程文章 ${rel} …`, () =>
+    withSftp(true, async (sftp) => {
+      await writeRemoteBuffer(sftp, remoteJoin(rel), Buffer.from(content, "utf8"));
+      remoteListCache.delete(rel);
+      emit("sys", `已保存到服务器 ${rel}`);
+      return { path: rel };
+    }),
+  );
 }
 
 export async function sshDeleteRemotePost(relPath: string): Promise<void> {
   const rel = assertRemotePost(relPath);
-  const sftp = await openConnectedSftp();
-  return withBusy(`正在删除远程文章 ${rel} …`, async () => {
-    await remoteRemove(sftp, remoteJoin(rel));
-    await remoteRemove(sftp, remoteJoin(rel.replace(/\.md$/i, "")));
-    remoteListCache.delete(rel);
-    emit("sys", `已从服务器删除 ${rel}`);
-  });
+  return withBusy(`正在删除远程文章 ${rel} …`, () =>
+    withSftp(true, async (sftp) => {
+      await remoteRemove(sftp, remoteJoin(rel));
+      await remoteRemove(sftp, remoteJoin(rel.replace(/\.md$/i, "")));
+      remoteListCache.delete(rel);
+      emit("sys", `已从服务器删除 ${rel}`);
+    }),
+  );
 }
 
 export async function sshRenameRemotePost(relPath: string, nextName: string): Promise<{ path: string }> {
@@ -596,27 +715,28 @@ export async function sshRenameRemotePost(relPath: string, nextName: string): Pr
   const dirRel = fromRel.split("/").slice(0, -1).join("/");
   const toRel = assertRemotePost(dirRel ? `${dirRel}/${filename}` : filename);
   if (fromRel === toRel) return { path: fromRel };
-  const sftp = await openConnectedSftp();
-  return withBusy(`正在重命名远程文章 ${fromRel} …`, async () => {
-    const fromAbs = remoteJoin(fromRel);
-    const toAbs = remoteJoin(toRel);
-    if (await remoteExists(sftp, toAbs)) {
-      throw new Error("同名远程文章已存在");
-    }
-    await sftpDone((cb) => sftp.rename(fromAbs, toAbs, cb));
-    const fromAsset = remoteJoin(fromRel.replace(/\.md$/i, ""));
-    const toAsset = remoteJoin(toRel.replace(/\.md$/i, ""));
-    if (await remoteExists(sftp, fromAsset)) {
-      if (await remoteExists(sftp, toAsset)) {
-        throw new Error("目标资源目录已存在");
+  return withBusy(`正在重命名远程文章 ${fromRel} …`, () =>
+    withSftp(true, async (sftp) => {
+      const fromAbs = remoteJoin(fromRel);
+      const toAbs = remoteJoin(toRel);
+      if (await remoteExists(sftp, toAbs)) {
+        throw new Error("同名远程文章已存在");
       }
-      await sftpDone((cb) => sftp.rename(fromAsset, toAsset, cb));
-    }
-    remoteListCache.delete(fromRel);
-    remoteListCache.delete(toRel);
-    emit("sys", `远程重命名 ${fromRel} → ${toRel}`);
-    return { path: toRel };
-  });
+      await sftpDone((cb) => sftp.rename(fromAbs, toAbs, cb));
+      const fromAsset = remoteJoin(fromRel.replace(/\.md$/i, ""));
+      const toAsset = remoteJoin(toRel.replace(/\.md$/i, ""));
+      if (await remoteExists(sftp, fromAsset)) {
+        if (await remoteExists(sftp, toAsset)) {
+          throw new Error("目标资源目录已存在");
+        }
+        await sftpDone((cb) => sftp.rename(fromAsset, toAsset, cb));
+      }
+      remoteListCache.delete(fromRel);
+      remoteListCache.delete(toRel);
+      emit("sys", `远程重命名 ${fromRel} → ${toRel}`);
+      return { path: toRel };
+    }),
+  );
 }
 
 export async function sshCreateRemotePost(
@@ -625,41 +745,43 @@ export async function sshCreateRemotePost(
 ): Promise<{ path: string; content: string }> {
   const hexoRoot = loadConfig().hexoRoot;
   const now = new Date();
-  const sftp = await openConnectedSftp();
-  return withBusy("正在远程新建文章…", async () => {
-    const base = slugifyTitle(title.trim() || "未命名");
-    let filename = sanitizePostFilename(base);
-    let rel = `source/_posts/${filename}`;
-    for (let n = 2; n < 200 && (await remoteExists(sftp, remoteJoin(rel))); n++) {
-      filename = sanitizePostFilename(`${base}-${n}`);
-      rel = `source/_posts/${filename}`;
-    }
-    if (await remoteExists(sftp, remoteJoin(rel))) {
-      throw new Error("无法生成不重复的远程文件名");
-    }
-    const slug = filename.replace(/\.md$/i, "");
-    const raw = resolveTemplateBody(hexoRoot, templateId);
-    const content = applyPostTemplate(raw, {
-      title: title.replace(/\r?\n/g, " ").trim() || "未命名",
-      date: hexoDate(now),
-      slug,
-      filename,
-    });
-    await writeRemoteBuffer(sftp, remoteJoin(rel), Buffer.from(content, "utf8"));
-    remoteListCache.delete(rel);
-    emit("sys", `已在服务器创建 ${rel}`);
-    return { path: rel, content };
-  });
+  return withBusy("正在远程新建文章…", () =>
+    withSftp(true, async (sftp) => {
+      const base = slugifyTitle(title.trim() || "未命名");
+      let filename = sanitizePostFilename(base);
+      let rel = `source/_posts/${filename}`;
+      for (let n = 2; n < 200 && (await remoteExists(sftp, remoteJoin(rel))); n++) {
+        filename = sanitizePostFilename(`${base}-${n}`);
+        rel = `source/_posts/${filename}`;
+      }
+      if (await remoteExists(sftp, remoteJoin(rel))) {
+        throw new Error("无法生成不重复的远程文件名");
+      }
+      const slug = filename.replace(/\.md$/i, "");
+      const raw = resolveTemplateBody(hexoRoot, templateId);
+      const content = applyPostTemplate(raw, {
+        title: title.replace(/\r?\n/g, " ").trim() || "未命名",
+        date: hexoDate(now),
+        slug,
+        filename,
+      });
+      await writeRemoteBuffer(sftp, remoteJoin(rel), Buffer.from(content, "utf8"));
+      remoteListCache.delete(rel);
+      emit("sys", `已在服务器创建 ${rel}`);
+      return { path: rel, content };
+    }),
+  );
 }
 
 export async function sshReadRemoteMedia(relPath: string): Promise<Buffer> {
   const rel = assertRemoteMedia(relPath);
-  const sftp = await openConnectedSftp();
-  const abs = remoteJoin(rel);
-  if (!(await remoteExists(sftp, abs))) {
-    throw new Error("远程文件不存在");
-  }
-  return readRemoteBuffer(sftp, abs);
+  return withSftp(true, async (sftp) => {
+    const abs = remoteJoin(rel);
+    if (!(await remoteExists(sftp, abs))) {
+      throw new Error("远程文件不存在");
+    }
+    return readRemoteBuffer(sftp, abs);
+  });
 }
 
 export async function sshSaveRemoteAsset(
@@ -686,9 +808,10 @@ export async function sshSaveRemoteAsset(
       .replace(/[^\w.\u4e00-\u9fff-]+/g, "-") || "image";
   const name = `${Date.now()}-${base}${ext}`;
   const assetRel = `${rel.replace(/\.md$/i, "")}/${name}`;
-  const sftp = await openConnectedSftp();
-  await writeRemoteBuffer(sftp, remoteJoin(assetRel), file.buffer);
-  return { url: name, key: assetRel };
+  return withSftp(true, async (sftp) => {
+    await writeRemoteBuffer(sftp, remoteJoin(assetRel), file.buffer);
+    return { url: name, key: assetRel };
+  });
 }
 
 export async function sshExec(kind: "generate" | "deploy" | "full"): Promise<{ code: number }> {
