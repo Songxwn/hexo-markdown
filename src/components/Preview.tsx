@@ -1,10 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import type { EditorScrollPos } from "./EditorPane";
 import { api } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
 import type { PostOrigin } from "../lib/types";
 
 export type PreviewHandle = {
   scrollToHeading: (id: string) => void;
+  scrollToSourceLine: (pos: EditorScrollPos) => void;
 };
 
 type Props = {
@@ -12,10 +14,50 @@ type Props = {
   postPath: string | null;
   origin?: PostOrigin;
   onActiveHeading?: (id: string | null) => void;
+  onRender?: () => void;
 };
 
+function interpolateY(anchors: { line: number; y: number }[], line: number): number {
+  if (!anchors.length) return 0;
+  if (line <= anchors[0].line) return anchors[0].y;
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const from = anchors[i];
+    const to = anchors[i + 1];
+    if (line > to.line) continue;
+    const span = to.line - from.line;
+    if (span <= 0) return to.y;
+    const t = (line - from.line) / span;
+    return from.y + t * (to.y - from.y);
+  }
+  return anchors[anchors.length - 1].y;
+}
+
+function collectAnchors(pane: HTMLElement, article: HTMLElement, totalLines: number) {
+  const paneRect = pane.getBoundingClientRect();
+  const anchors: { line: number; y: number }[] = [{ line: 0, y: 0 }];
+  for (const node of article.querySelectorAll<HTMLElement>("[data-line]")) {
+    const line = Number(node.dataset.line);
+    if (!Number.isFinite(line)) continue;
+    const y = node.getBoundingClientRect().top - paneRect.top + pane.scrollTop;
+    anchors.push({ line, y });
+  }
+  const max = Math.max(0, pane.scrollHeight - pane.clientHeight);
+  anchors.push({ line: Math.max(totalLines - 1, 0), y: max });
+  anchors.sort((a, b) => a.line - b.line || a.y - b.y);
+  const dedup: { line: number; y: number }[] = [];
+  for (const anchor of anchors) {
+    const prev = dedup[dedup.length - 1];
+    if (prev && prev.line === anchor.line) {
+      prev.y = (prev.y + anchor.y) / 2;
+      continue;
+    }
+    dedup.push({ ...anchor });
+  }
+  return dedup;
+}
+
 export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
-  { markdown, postPath, origin = "local", onActiveHeading },
+  { markdown, postPath, origin = "local", onActiveHeading, onRender },
   ref,
 ) {
   const articleRef = useRef<HTMLElement>(null);
@@ -36,7 +78,27 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
       target.classList.add("heading-flash");
       window.setTimeout(() => target.classList.remove("heading-flash"), 1200);
     },
+    scrollToSourceLine(pos) {
+      const article = articleRef.current;
+      const pane = article?.closest(".preview-pane") as HTMLElement | null;
+      if (!article || !pane) return;
+      const max = Math.max(0, pane.scrollHeight - pane.clientHeight);
+      if (pos.atStart || max <= 0) {
+        pane.scrollTop = 0;
+        return;
+      }
+      if (pos.atEnd) {
+        pane.scrollTop = max;
+        return;
+      }
+      const y = interpolateY(collectAnchors(pane, article, pos.totalLines), pos.line);
+      pane.scrollTop = Math.min(max, Math.max(0, y));
+    },
   }));
+
+  useEffect(() => {
+    onRender?.();
+  }, [html, onRender]);
 
   useEffect(() => {
     const article = articleRef.current;

@@ -177,13 +177,100 @@ function escapeAttr(value: string): string {
 function applyHeadingIds(html: string, headings: MdHeading[]): string {
   let index = 0;
   return html.replace(/<h([1-6])([^>]*)>/gi, (full, level: string, attrs: string) => {
-    if (/\sid\s*=/i.test(full)) return full;
     const heading = headings[index];
     index += 1;
     if (!heading) return full;
-    return `<h${level}${attrs} id="${escapeAttr(heading.id)}">`;
+    const cleaned = attrs.replace(/\s(?:id|data-line)="[^"]*"/gi, "");
+    return `<h${level}${cleaned} id="${escapeAttr(heading.id)}" data-line="${heading.line}">`;
   });
 }
+
+function frontMatterNewlines(raw: string): number {
+  const match = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  if (!match) return 0;
+  return (match[0].match(/\n/g) || []).length;
+}
+
+function extractFenceStartLines(body: string, lineBase: number): number[] {
+  const lines = body.split("\n");
+  const out: number[] = [];
+  let fence: { ch: string; len: number } | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\r$/, "");
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (!fenceMatch) continue;
+    const marker = fenceMatch[1];
+    if (!fence) {
+      fence = { ch: marker[0], len: marker.length };
+      out.push(lineBase + i);
+      continue;
+    }
+    if (marker[0] === fence.ch && marker.length >= fence.len && !fenceMatch[2].trim()) {
+      fence = null;
+    }
+  }
+  return out;
+}
+
+function applyPreDataLines(html: string, lines: number[]): string {
+  let index = 0;
+  return html.replace(/<pre\b([^>]*)>/gi, (full, attrs: string) => {
+    if (/\sdata-line=/i.test(full)) return full;
+    const line = lines[index];
+    index += 1;
+    if (line == null) return full;
+    return `<pre${attrs} data-line="${line}">`;
+  });
+}
+
+let lineSource = "";
+let lineBase = 0;
+
+function lineIndex(source: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === "\n") starts.push(i + 1);
+  }
+  return starts;
+}
+
+function offsetToLine(starts: number[], offset: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (starts[mid] <= offset) low = mid + 1;
+    else high = mid - 1;
+  }
+  return Math.max(0, high);
+}
+
+marked.use({
+  hooks: {
+    processAllTokens(tokens) {
+      const starts = lineIndex(lineSource);
+      let offset = 0;
+      for (const token of tokens as { raw?: string; _sourceLine?: number }[]) {
+        token._sourceLine = lineBase + offsetToLine(starts, offset);
+        offset += token.raw?.length ?? 0;
+      }
+      return tokens;
+    },
+  },
+  renderer: {
+    paragraph(this: { parser: { parseInline: (tokens: unknown) => string } }, token) {
+      const line = (token as { _sourceLine?: number })._sourceLine;
+      const text = this.parser.parseInline((token as { tokens: unknown }).tokens);
+      if (line == null) return `<p>${text}</p>\n`;
+      return `<p data-line="${line}">${text}</p>\n`;
+    },
+    hr(this: unknown, token) {
+      const line = (token as { _sourceLine?: number })._sourceLine;
+      if (line == null) return "<hr>\n";
+      return `<hr data-line="${line}">\n`;
+    },
+  },
+});
 
 export function parseTitle(raw: string): string {
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -240,7 +327,12 @@ export function renderMarkdown(
 ): string {
   const headings = extractHeadings(raw);
   const body = preprocessHexo(stripFrontMatter(raw));
-  const html = applyHeadingIds(marked.parse(body, { async: false }) as string, headings);
+  lineSource = body;
+  lineBase = frontMatterNewlines(raw);
+  const html = applyPreDataLines(
+    applyHeadingIds(marked.parse(body, { async: false }) as string, headings),
+    extractFenceStartLines(body, lineBase),
+  );
   return DOMPurify.sanitize(rewriteLocalImages(html, postPath, origin), {
     ADD_ATTR: ["target", "id"],
     ALLOWED_URI_REGEXP:

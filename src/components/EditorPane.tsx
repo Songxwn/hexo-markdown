@@ -7,6 +7,13 @@ import { minimalSetup } from "codemirror";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { inkHighlighting, inkTheme } from "../lib/cm-theme";
 
+export type EditorScrollPos = {
+  line: number;
+  totalLines: number;
+  atStart: boolean;
+  atEnd: boolean;
+};
+
 export type EditorHandle = {
   wrapSelection: (before: string, after?: string) => void;
   insertAtCursor: (text: string) => void;
@@ -19,7 +26,39 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   onPasteImage: (file: File) => void;
+  onScroll?: (pos: EditorScrollPos) => void;
 };
+
+function readScrollPos(view: EditorView): EditorScrollPos {
+  const scroller = view.scrollDOM;
+  const totalLines = view.state.doc.lines;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  const atStart = scroller.scrollTop <= 1;
+  const atEnd = max > 0 && scroller.scrollTop >= max - 2;
+  if (atStart) return { line: 0, totalLines, atStart: true, atEnd: false };
+  if (atEnd) return { line: Math.max(totalLines - 1, 0), totalLines, atStart: false, atEnd: true };
+
+  const rect = scroller.getBoundingClientRect();
+  const pos = view.posAtCoords({ x: rect.left + 56, y: rect.top + 10 });
+  if (pos == null) {
+    const ratio = max > 0 ? scroller.scrollTop / max : 0;
+    return { line: ratio * Math.max(totalLines - 1, 0), totalLines, atStart: false, atEnd: false };
+  }
+  const line = view.state.doc.lineAt(pos);
+  const start = view.coordsAtPos(line.from);
+  const end = view.coordsAtPos(Math.min(line.to, line.from + 1));
+  let frac = 0;
+  if (start && end && end.bottom > start.top) {
+    frac = (rect.top + 10 - start.top) / (end.bottom - start.top);
+    frac = Math.min(0.99, Math.max(0, frac));
+  }
+  return {
+    line: line.number - 1 + frac,
+    totalLines,
+    atStart: false,
+    atEnd: false,
+  };
+}
 
 function collectImages(list: FileList | DataTransferItemList | null): File[] {
   if (!list) return [];
@@ -40,15 +79,17 @@ function collectImages(list: FileList | DataTransferItemList | null): File[] {
 }
 
 export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
-  { value, onChange, onPasteImage },
+  { value, onChange, onPasteImage, onScroll },
   ref,
 ) {
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onPasteRef = useRef(onPasteImage);
+  const onScrollRef = useRef(onScroll);
   onChangeRef.current = onChange;
   onPasteRef.current = onPasteImage;
+  onScrollRef.current = onScroll;
 
   useImperativeHandle(ref, () => ({
     wrapSelection(before, after = before) {
@@ -150,13 +191,20 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
           if (update.docChanged) {
             onChangeRef.current(update.state.doc.toString());
           }
+          if (update.docChanged || update.geometryChanged) {
+            onScrollRef.current?.(readScrollPos(update.view));
+          }
         }),
       ],
     });
 
     const view = new EditorView({ state, parent: parentRef.current });
     viewRef.current = view;
+    const onScrollerScroll = () => onScrollRef.current?.(readScrollPos(view));
+    view.scrollDOM.addEventListener("scroll", onScrollerScroll, { passive: true });
+    queueMicrotask(() => onScrollRef.current?.(readScrollPos(view)));
     return () => {
+      view.scrollDOM.removeEventListener("scroll", onScrollerScroll);
       view.destroy();
       viewRef.current = null;
     };
@@ -170,6 +218,8 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
       });
+      view.scrollDOM.scrollTop = 0;
+      onScrollRef.current?.(readScrollPos(view));
     }
   }, [value]);
 

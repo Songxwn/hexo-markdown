@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "./components/AboutModal";
-import { EditorPane, type EditorHandle } from "./components/EditorPane";
+import { EditorPane, type EditorHandle, type EditorScrollPos } from "./components/EditorPane";
 import { NewPostModal } from "./components/NewPostModal";
 import { Outline } from "./components/Outline";
 import { Preview, type PreviewHandle } from "./components/Preview";
@@ -44,6 +44,8 @@ export default function App() {
   const editorRef = useRef<EditorHandle>(null);
   const previewRef = useRef<PreviewHandle>(null);
   const outlineLock = useRef(0);
+  const editorScrollRef = useRef<EditorScrollPos>({ line: 0, totalLines: 1, atStart: true, atEnd: false });
+  const syncRaf = useRef(0);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [templates, setTemplates] = useState<TemplateSet | null>(null);
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -99,10 +101,24 @@ export default function App() {
   }, []);
 
   const jumpToHeading = useCallback((heading: { id: string; line: number }) => {
-    outlineLock.current = Date.now() + 500;
+    outlineLock.current = Date.now() + 600;
     setActiveHeadingId(heading.id);
     previewRef.current?.scrollToHeading(heading.id);
     editorRef.current?.gotoLine(heading.line);
+  }, []);
+
+  const syncPreviewToEditor = useCallback((pos: EditorScrollPos) => {
+    editorScrollRef.current = pos;
+    if (Date.now() < outlineLock.current) return;
+    if (syncRaf.current) cancelAnimationFrame(syncRaf.current);
+    syncRaf.current = requestAnimationFrame(() => {
+      previewRef.current?.scrollToSourceLine(pos);
+    });
+  }, []);
+
+  const restorePreviewScroll = useCallback(() => {
+    if (Date.now() < outlineLock.current) return;
+    previewRef.current?.scrollToSourceLine(editorScrollRef.current);
   }, []);
 
   useEffect(() => {
@@ -188,6 +204,7 @@ export default function App() {
   }, [dirty]);
 
   useEffect(() => {
+    editorScrollRef.current = { line: 0, totalLines: 1, atStart: true, atEnd: false };
     setActiveHeadingId(null);
   }, [path, editingOrigin]);
 
@@ -636,7 +653,13 @@ export default function App() {
           {path ? (
             <div className="split">
               <div className="pane editor-pane" style={{ width: `${split}%` }}>
-                <EditorPane ref={editorRef} value={content} onChange={setContent} onPasteImage={handlePasteImage} />
+                <EditorPane
+                  ref={editorRef}
+                  value={content}
+                  onChange={setContent}
+                  onPasteImage={handlePasteImage}
+                  onScroll={syncPreviewToEditor}
+                />
               </div>
               <div className="divider" onMouseDown={startResize} />
               <div className="preview-stage">
@@ -647,6 +670,7 @@ export default function App() {
                     postPath={path}
                     origin={editingOrigin}
                     onActiveHeading={setVisibleHeading}
+                    onRender={restorePreviewScroll}
                   />
                 </div>
                 {outlineOpen ? (
