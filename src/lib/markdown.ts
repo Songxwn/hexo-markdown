@@ -1,29 +1,8 @@
 import DOMPurify from "dompurify";
-import hljs from "highlight.js";
 import { Marked } from "marked";
-import { markedHighlight } from "marked-highlight";
+import { fenceInfoFromToken, hexoCodeblockToFence, renderCodeBlock } from "./codeblock";
 
-function isMermaidLang(lang: string | undefined | null): boolean {
-  const name = (lang || "").trim().toLowerCase();
-  return name === "mermaid" || name === "mmd";
-}
-
-const marked = new Marked(
-  markedHighlight({
-    emptyLangClass: "hljs",
-    langPrefix: "hljs language-",
-    highlight(code, lang) {
-      if (isMermaidLang(lang)) {
-        return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      }
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
-      }
-      return hljs.highlightAuto(code).value;
-    },
-  }),
-);
-
+const marked = new Marked();
 marked.setOptions({ gfm: true, breaks: true });
 
 export function stripFrontMatter(raw: string): string {
@@ -266,6 +245,17 @@ marked.use({
     },
   },
   renderer: {
+    code(token) {
+      const text = token.escaped
+        ? token.text
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, "&")
+        : token.text;
+      return renderCodeBlock(text, fenceInfoFromToken(token));
+    },
     paragraph(this: { parser: { parseInline: (tokens: unknown) => string } }, token) {
       const line = (token as { _sourceLine?: number })._sourceLine;
       const text = this.parser.parseInline((token as { tokens: unknown }).tokens);
@@ -305,10 +295,8 @@ function preprocessHexo(md: string): string {
       },
     )
     .replace(
-      /\{%\s*codeblock(?:\s+(?:lang:)?(\S+))?[^\n%]*%\}([\s\S]*?)\{%\s*endcodeblock\s*%\}/g,
-      (_all, lang: string | undefined, body: string) => {
-        return `\`\`\`${lang || ""}\n${body.replace(/^\n|\n$/g, "")}\n\`\`\``;
-      },
+      /\{%\s*codeblock\b([^%]*)%\}([\s\S]*?)\{%\s*endcodeblock\s*%\}/g,
+      (_all, args: string, body: string) => hexoCodeblockToFence(args, body),
     )
     .replace(/\{%\s*mermaid\b[^%]*%\}([\s\S]*?)\{%\s*endmermaid\s*%\}/g, (_all, body: string) => {
       return `\n\`\`\`mermaid\n${String(body).trim()}\n\`\`\`\n`;
@@ -384,8 +372,8 @@ export function renderMarkdown(
     ),
   );
   return DOMPurify.sanitize(html, {
-    ADD_TAGS: ["figure", "figcaption"],
-    ADD_ATTR: ["target", "id"],
+    ADD_TAGS: ["figure", "figcaption", "button"],
+    ADD_ATTR: ["target", "id", "type"],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|hexomd|data|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
   });

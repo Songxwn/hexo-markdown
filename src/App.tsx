@@ -488,6 +488,7 @@ export default function App() {
       const placeholder = `![](uploading:${id})`;
       editorRef.current?.insertAtCursor(`${placeholder}\n`);
       setUploadHint(settings?.r2Configured ? "正在上传到 Cloudflare R2…" : "正在保存图片…");
+      if (settings?.r2Configured) setLogOpen(true);
       try {
         const result = await api.uploadImage(file, path, editingOrigin);
         editorRef.current?.replaceText(placeholder, `![](${result.url})`);

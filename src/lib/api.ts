@@ -175,6 +175,10 @@ export const api = {
     };
   },
 
+  listLlmModels(payload: { baseUrl: string; apiKey?: string }): Promise<{ models: string[]; url: string }> {
+    return desktop().listLlmModels(payload);
+  },
+
   onMenu(handler: (action: MenuAction) => void): () => void {
     return desktop().onMenu(handler);
   },

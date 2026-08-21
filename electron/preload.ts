@@ -70,6 +70,8 @@ const api = {
     article: string;
   }) => ipcRenderer.send("llm:chat", payload),
   llmAbort: (id: number) => ipcRenderer.send("llm:abort", id),
+  listLlmModels: (payload: { baseUrl: string; apiKey?: string }) =>
+    ipcRenderer.invoke("llm:models", payload) as Promise<{ models: string[]; url: string }>,
   onLlmChunk: (handler: (event: { id: number; text: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { id: number; text: string }) =>
       handler(payload);

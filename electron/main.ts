@@ -56,7 +56,7 @@ import {
   sshPush,
   sshStatus,
 } from "../server/ssh";
-import { streamLlmChat } from "../server/llm";
+import { listLlmModels, streamLlmChat } from "../server/llm";
 import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "../server/types";
 
 protocol.registerSchemesAsPrivileged([
@@ -552,6 +552,13 @@ function registerIpc(): void {
   });
   ipcMain.on("llm:abort", (_event, id) => {
     abortLlm(Number(id));
+  });
+  handle("llm:models", (payload) => {
+    const data = (payload || {}) as { baseUrl?: unknown; apiKey?: unknown };
+    return listLlmModels({
+      baseUrl: typeof data.baseUrl === "string" ? data.baseUrl : "",
+      apiKey: typeof data.apiKey === "string" ? data.apiKey : "",
+    });
   });
   ipcMain.on("window:dirty", (_event, value: boolean) => {
     dirty = Boolean(value);

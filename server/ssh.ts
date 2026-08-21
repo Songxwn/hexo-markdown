@@ -7,6 +7,7 @@ import { loadConfig } from "./config";
 import { hexoDate, resolveRel, sanitizePostFilename, slugifyTitle } from "./posts";
 import { applyPostTemplate, resolveTemplateBody } from "./templates";
 import type { PostSummary, SshLogKind, SyncResult } from "./types";
+import { emitLog, setActivityLog } from "./activity-log";
 
 type LogFn = (kind: SshLogKind, text: string) => void;
 type StatusFn = () => void;
@@ -16,12 +17,11 @@ let connecting: Promise<Client> | null = null;
 let sftpSession: SFTPWrapper | null = null;
 let sftpOpening: Promise<SFTPWrapper> | null = null;
 let recovering: Promise<void> | null = null;
-let log: LogFn = () => undefined;
 let onStatus: StatusFn = () => undefined;
 let busyCount = 0;
 
 export function setSshHooks(hooks: { log?: LogFn; onStatus?: StatusFn }): void {
-  if (hooks.log) log = hooks.log;
+  if (hooks.log) setActivityLog(hooks.log);
   if (hooks.onStatus) onStatus = hooks.onStatus;
 }
 
@@ -36,7 +36,7 @@ export function sshStatus() {
 }
 
 function emit(kind: SshLogKind, text: string): void {
-  log(kind, text);
+  emitLog(kind, text);
 }
 
 function shQuote(value: string): string {

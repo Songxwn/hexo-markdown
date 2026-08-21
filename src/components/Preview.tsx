@@ -19,6 +19,48 @@ type Props = {
   onRender?: () => void;
 };
 
+function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).then(
+      () => true,
+      () => copyTextFallback(text),
+    );
+  }
+  return Promise.resolve(copyTextFallback(text));
+}
+
+function copyTextFallback(text: string): boolean {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.setAttribute("readonly", "");
+  el.style.position = "fixed";
+  el.style.left = "-9999px";
+  document.body.appendChild(el);
+  el.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  el.remove();
+  return ok;
+}
+
+function copyFromCodeBlock(block: Element, button: HTMLButtonElement) {
+  const text = [...block.querySelectorAll(".code-tx")].map((node) => node.textContent ?? "").join("\n");
+  void copyText(text).then((ok) => {
+    if (!ok) return;
+    const prev = button.textContent;
+    button.textContent = "已复制";
+    button.classList.add("is-copied");
+    window.setTimeout(() => {
+      button.textContent = prev || "复制";
+      button.classList.remove("is-copied");
+    }, 1400);
+  });
+}
+
 function interpolateY(anchors: { line: number; y: number }[], line: number): number {
   if (!anchors.length) return 0;
   if (line <= anchors[0].line) return anchors[0].y;
@@ -161,7 +203,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
     return (
       <div className="preview-empty">
         <p>预览会出现在这里</p>
-        <span>支持 GFM、代码高亮、Mermaid 流程图，以及常见 Hexo 标签</span>
+        <span>支持 GFM、代码高亮、行号、复制，以及 Mermaid 与常见 Hexo 标签</span>
       </div>
     );
   }
@@ -173,6 +215,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview(
         className="preview-article"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={(event) => {
+          const copyBtn = (event.target as HTMLElement).closest(".preview-code-copy");
+          if (copyBtn instanceof HTMLButtonElement) {
+            event.preventDefault();
+            const block = copyBtn.closest(".preview-code");
+            if (block) copyFromCodeBlock(block, copyBtn);
+            return;
+          }
           const img = (event.target as HTMLElement).closest("img");
           if (img) {
             event.preventDefault();

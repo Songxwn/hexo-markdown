@@ -65,6 +65,7 @@ type HexoDesktopAPI = {
     article: string;
   }) => void;
   llmAbort: (id: number) => void;
+  listLlmModels: (payload: { baseUrl: string; apiKey?: string }) => Promise<{ models: string[]; url: string }>;
   onLlmChunk: (handler: (event: { id: number; text: string }) => void) => () => void;
   onLlmDone: (handler: (event: { id: number }) => void) => () => void;
   onLlmError: (handler: (event: { id: number; message: string }) => void) => () => void;

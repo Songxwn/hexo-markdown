@@ -26,7 +26,9 @@ export function RemoteLog({ open, lines, onClear }: Props) {
         </button>
       </header>
       <div className="remote-log-body" ref={scroller}>
-        {lines.length === 0 && <p className="muted-block">连接服务器后，SFTP 与 Hexo 命令输出会显示在这里。</p>}
+        {lines.length === 0 && (
+          <p className="muted-block">SFTP、Hexo 命令和 R2 图片上传会显示在这里。</p>
+        )}
         {lines.map((line, index) => (
           <pre key={`${line.ts}-${index}`} className={`log-${line.kind}`}>
             {line.text}

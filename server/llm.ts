@@ -15,6 +15,128 @@ function resolveChatUrl(base: string): string {
   return `${raw.replace(/\/+$/, "")}/chat/completions`;
 }
 
+function pathAndQuery(raw: string): { path: string; query: string } {
+  const trimmed = raw.trim();
+  const idx = trimmed.indexOf("?");
+  if (idx < 0) return { path: trimmed.replace(/\/+$/, ""), query: "" };
+  return { path: trimmed.slice(0, idx).replace(/\/+$/, ""), query: trimmed.slice(idx) };
+}
+
+function candidateModelUrls(base: string): string[] {
+  const raw = base.trim();
+  if (!raw) return [];
+  const { path, query } = pathAndQuery(raw);
+  const out: string[] = [];
+  const add = (url: string) => {
+    if (url && !out.includes(url)) out.push(url);
+  };
+
+  if (/\/chat\/completions$/i.test(path)) {
+    add(`${path.replace(/\/chat\/completions$/i, "/models")}${query}`);
+    add(`${path.replace(/\/openai\/deployments\/[^/]+\/chat\/completions$/i, "/openai/models")}${query}`);
+    add(`${path.replace(/\/openai\/deployments\/[^/]+\/chat\/completions$/i, "/openai/deployments")}${query}`);
+  } else if (/\/models$/i.test(path)) {
+    add(`${path}${query}`);
+  } else {
+    add(`${path}/models${query}`);
+    if (!/\/v\d+$/i.test(path)) add(`${path}/v1/models${query}`);
+  }
+
+  try {
+    const parsed = new URL(/^https?:/i.test(path) ? path : `http://${path}`);
+    if (/11434/.test(parsed.host) || /ollama/i.test(parsed.hostname)) {
+      add(`${parsed.origin}/v1/models`);
+      add(`${parsed.origin}/api/tags`);
+    }
+  } catch {
+    /* ignore invalid url */
+  }
+
+  return out;
+}
+
+function llmHeaders(url: string, key: string, accept = "application/json"): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: accept,
+    "HTTP-Referer": "https://github.com/Songxwn/hexo-markdown",
+    "X-Title": "Hexo Markdown",
+  };
+  if (key) {
+    headers.Authorization = `Bearer ${key}`;
+    if (/azure\.com|cognitiveservices/i.test(url)) headers["api-key"] = key;
+  }
+  return headers;
+}
+
+function collectModelIds(value: unknown, out: Set<string>, depth = 0): void {
+  if (depth > 5 || value == null) return;
+  if (typeof value === "string") {
+    const id = value.trim();
+    if (id && id.length < 200 && !/\s/.test(id)) out.add(id);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectModelIds(item, out, depth + 1);
+    return;
+  }
+  if (typeof value !== "object") return;
+  const rec = value as Record<string, unknown>;
+  const id = rec.id ?? rec.name ?? rec.model ?? rec.model_id ?? rec.modelId;
+  if (typeof id === "string" && id.trim()) out.add(id.trim());
+  if (Array.isArray(rec.data) || Array.isArray(rec.models) || Array.isArray(rec.result)) {
+    collectModelIds(rec.data ?? rec.models ?? rec.result, out, depth + 1);
+    return;
+  }
+  if (rec.data && typeof rec.data === "object") collectModelIds(rec.data, out, depth + 1);
+}
+
+function parseModelIds(json: unknown): string[] {
+  const out = new Set<string>();
+  collectModelIds(json, out);
+  return [...out].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+}
+
+export async function listLlmModels(input?: { baseUrl?: string; apiKey?: string }): Promise<{
+  models: string[];
+  url: string;
+}> {
+  const cfg = loadConfig();
+  const baseUrl = (input?.baseUrl || cfg.llmBaseUrl || "").trim();
+  const apiKey = (input?.apiKey || "").trim() || cfg.llmApiKey.trim();
+  if (!baseUrl) throw new Error("请先填写 LLM 接口地址");
+
+  const urls = candidateModelUrls(baseUrl);
+  if (!urls.length) throw new Error("接口地址无效");
+
+  const signal = AbortSignal.timeout(20000);
+  const errors: string[] = [];
+  let authDenied = false;
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { method: "GET", headers: llmHeaders(url, apiKey), signal });
+      if (res.status === 401 || res.status === 403) authDenied = true;
+      if (!res.ok) {
+        const detail = await readHttpError(res);
+        errors.push(detail || `HTTP ${res.status}`);
+        continue;
+      }
+      const json: unknown = await res.json();
+      const models = parseModelIds(json);
+      if (models.length) return { models, url };
+      errors.push("返回里没有模型 ID");
+    } catch (error) {
+      if (signal.aborted || (error instanceof Error && error.name === "TimeoutError")) {
+        throw new Error("探测超时（20 秒）。请检查地址是否可访问");
+      }
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (authDenied) throw new Error("接口拒绝访问。请填写有效的 API Key 后再探测");
+  throw new Error(errors[0] || "无法获取模型列表。该接口可能未提供 /models");
+}
+
 function clip(text: string, max: number): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max)}\n\n[已截断]`;
@@ -177,15 +299,9 @@ export async function* streamLlmChat(input: LlmChatInput, signal: AbortSignal): 
   const url = resolveChatUrl(cfg.llmBaseUrl);
   const key = cfg.llmApiKey.trim();
   const headers: Record<string, string> = {
+    ...llmHeaders(url, key, "text/event-stream"),
     "Content-Type": "application/json",
-    Accept: "text/event-stream",
-    "HTTP-Referer": "https://github.com/Songxwn/hexo-markdown",
-    "X-Title": "Hexo Markdown",
   };
-  if (key) {
-    headers.Authorization = `Bearer ${key}`;
-    if (/azure\.com|cognitiveservices/i.test(url)) headers["api-key"] = key;
-  }
 
   const payload = {
     model: cfg.llmModel.trim(),

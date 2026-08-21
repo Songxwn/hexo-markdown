@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { extname } from "node:path";
 import { nanoid } from "nanoid";
+import { emitLog } from "./activity-log";
 import type { AppConfig } from "./types";
 
 function createClient(cfg: AppConfig): S3Client {
@@ -33,6 +34,12 @@ function safeBaseName(name: string): string {
   return cleaned || "image";
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export async function uploadToR2(
   cfg: AppConfig,
   file: { buffer: Buffer; originalname: string; mimetype: string },
@@ -45,17 +52,28 @@ export async function uploadToR2(
   const base = safeBaseName(file.originalname).replace(/\.[^.]+$/, "") || "image";
   const prefix = (cfg.r2KeyPrefix || "hexo").replace(/^\/+|\/+$/g, "");
   const key = `${prefix}/${y}/${m}/${d}/${nanoid(10)}-${base}${ext}`;
+  const size = formatBytes(file.buffer.length);
 
-  const client = createClient(cfg);
-  await client.send(
-    new PutObjectCommand({
-      Bucket: cfg.r2Bucket,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype || "application/octet-stream",
-    }),
-  );
+  emitLog("sys", `[R2] 上传 ${file.originalname || "image"}（${size}）`);
+  emitLog("sys", `[R2] ${cfg.r2Bucket}/${key}`);
+
+  try {
+    const client = createClient(cfg);
+    await client.send(
+      new PutObjectCommand({
+        Bucket: cfg.r2Bucket,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype || "application/octet-stream",
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    emitLog("err", `[R2] 失败 ${message}`);
+    throw error;
+  }
 
   const url = `${cfg.r2PublicUrl}/${key}`;
+  emitLog("sys", `[R2] 完成 ${url}`);
   return { url, key };
 }

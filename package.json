@@ -1,6 +1,6 @@
 {
   "name": "hexo-markdown",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -113,7 +113,6 @@
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.539.0",
     "marked": "^16.1.2",
-    "marked-highlight": "^2.2.2",
     "mermaid": "^11.6.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

@@ -1,5 +1,20 @@
-import { Download, FolderOpen, KeyRound, Plus, Trash2, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Archive,
+  Cloud,
+  Download,
+  FileText,
+  FolderOpen,
+  KeyRound,
+  Loader2,
+  Palette,
+  Plus,
+  Search,
+  Server,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { LLM_PRESETS } from "../lib/llm";
 import { applyTheme, DEFAULT_THEME, THEMES } from "../lib/theme";
@@ -81,11 +96,40 @@ function Hint({ children }: { children: React.ReactNode }) {
   return <small className="field-hint">{children}</small>;
 }
 
+type SettingsSection = "appearance" | "hexo" | "templates" | "llm" | "r2" | "ssh" | "backup";
+
+const SETTINGS_NAV: { id: SettingsSection; label: string; icon: typeof Palette }[] = [
+  { id: "appearance", label: "外观", icon: Palette },
+  { id: "hexo", label: "本地 Hexo", icon: FolderOpen },
+  { id: "templates", label: "文章模板", icon: FileText },
+  { id: "llm", label: "LLM 协助", icon: Sparkles },
+  { id: "r2", label: "Cloudflare R2", icon: Cloud },
+  { id: "ssh", label: "SSH / SFTP", icon: Server },
+  { id: "backup", label: "导入 / 导出", icon: Archive },
+];
+
+function readSettingsSection(): SettingsSection {
+  try {
+    const id = window.localStorage.getItem("hexomd.settingsNav");
+    if (SETTINGS_NAV.some((item) => item.id === id)) return id as SettingsSection;
+  } catch {
+    /* ignore quota */
+  }
+  return "appearance";
+}
+
 export function SettingsModal({ open, settings, templates, saving, version, onClose, onSave, onExport, onImport }: Props) {
   const [form, setForm] = useState(empty);
   const [tpl, setTpl] = useState(cloneUserTemplates(templates));
   const [activeTpl, setActiveTpl] = useState(tpl.defaultId);
   const [transferring, setTransferring] = useState(false);
+  const [section, setSection] = useState<SettingsSection>(readSettingsSection);
+  const [llmModels, setLlmModels] = useState<string[]>([]);
+  const [llmModelQuery, setLlmModelQuery] = useState("");
+  const [llmProbeBusy, setLlmProbeBusy] = useState(false);
+  const [llmProbeError, setLlmProbeError] = useState<string | null>(null);
+  const [llmProbeHint, setLlmProbeHint] = useState<string | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open && settings) {
@@ -118,8 +162,16 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
       const next = cloneUserTemplates(templates);
       setTpl(next);
       setActiveTpl(next.items.some((item) => item.id === next.defaultId) ? next.defaultId : next.items[0].id);
+      setLlmModels([]);
+      setLlmModelQuery("");
+      setLlmProbeError(null);
+      setLlmProbeHint(null);
     }
   }, [open, settings, templates]);
+
+  useEffect(() => {
+    paneRef.current?.scrollTo({ top: 0 });
+  }, [section]);
 
   if (!open) return null;
 
@@ -152,6 +204,43 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
     setActiveTpl(defaultId);
   }
 
+  function clearLlmProbe() {
+    setLlmModels([]);
+    setLlmModelQuery("");
+    setLlmProbeError(null);
+    setLlmProbeHint(null);
+  }
+
+  async function probeLlmModels() {
+    const baseUrl = (form.llmBaseUrl || "").trim();
+    if (!baseUrl) {
+      setLlmProbeError("请先填写接口地址");
+      return;
+    }
+    setLlmProbeBusy(true);
+    setLlmProbeError(null);
+    setLlmProbeHint(null);
+    try {
+      const result = await api.listLlmModels({
+        baseUrl,
+        apiKey: (form.llmApiKey || "").trim(),
+      });
+      setLlmModels(result.models);
+      setLlmProbeHint(`读到 ${result.models.length} 个模型`);
+      if (!(form.llmModel || "").trim() && result.models[0]) set("llmModel", result.models[0]);
+    } catch (error) {
+      setLlmModels([]);
+      setLlmProbeError(error instanceof Error ? error.message : "探测失败");
+    } finally {
+      setLlmProbeBusy(false);
+    }
+  }
+
+  const llmModelMatches = llmModels.filter((id) =>
+    id.toLowerCase().includes(llmModelQuery.trim().toLowerCase()),
+  );
+  const llmModelShown = llmModelMatches.slice(0, 80);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal settings-wide" onClick={(e) => e.stopPropagation()}>
@@ -162,6 +251,36 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
           </p>
         </header>
 
+        <div className="settings-layout">
+          <nav className="settings-nav" aria-label="设置分类">
+            {SETTINGS_NAV.map((item) => {
+              const Icon = item.icon;
+              const on = section === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={on ? "on" : ""}
+                  aria-current={on ? "page" : undefined}
+                  onClick={() => {
+                    setSection(item.id);
+                    try {
+                      window.localStorage.setItem("hexomd.settingsNav", item.id);
+                    } catch {
+                      /* ignore quota */
+                    }
+                  }}
+                >
+                  <Icon size={15} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="settings-pane" ref={paneRef}>
+        {section === "appearance" ? (
+          <>
         <h3>外观</h3>
         <p className="section-hint">点选即可预览，保存后写入本机配置。也可从菜单栏「视图 → 外观」切换。</p>
         <div className="skin-grid">
@@ -257,7 +376,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             })}
           </div>
         </div>
+          </>
+        ) : null}
 
+        {section === "hexo" ? (
+          <>
         <h3>本地 Hexo</h3>
         <p className="section-hint">文章列表、保存和本地图片备份都基于这个目录。请指向 Hexo 站点根目录，而不是 `source/_posts`。</p>
         <label>
@@ -285,7 +408,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             <small className="warn-text">当前路径下没有找到 `_config.yml`，请确认这是 Hexo 根目录。</small>
           )}
         </label>
+          </>
+        ) : null}
 
+        {section === "templates" ? (
+          <>
         <h3>文章模板</h3>
         <p className="section-hint">
           新建文章会套用选中的模板，并把 <code>date</code> 写成当前时间。文件名只保留标题，不再加日期前缀。占位符：
@@ -336,7 +463,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             </label>
           </>
         ) : null}
+          </>
+        ) : null}
 
+        {section === "llm" ? (
+          <>
         <h3>LLM 协助</h3>
         <p className="section-hint">
           对接 OpenAI 兼容的 <code>/chat/completions</code> 接口，用于续写、润色、扩写等。点选预设会填入地址和默认模型，再补上自己的 Key。Ollama 等本地服务可以不填 Key。
@@ -354,6 +485,7 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
                 onClick={() => {
                   set("llmBaseUrl", preset.baseUrl);
                   set("llmModel", preset.model);
+                  clearLlmProbe();
                 }}
               >
                 {preset.name}
@@ -366,27 +498,82 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             接口地址
             <input
               value={form.llmBaseUrl || ""}
-              onChange={(e) => set("llmBaseUrl", e.target.value)}
+              onChange={(e) => {
+                set("llmBaseUrl", e.target.value);
+                clearLlmProbe();
+              }}
               placeholder="https://api.openai.com/v1"
               autoComplete="off"
             />
             <Hint>
-              填到 <code>/v1</code> 即可，应用会自动补上 <code>/chat/completions</code>。若已包含完整路径则原样使用。也支持 Azure OpenAI 的完整 completions URL。
+              填到 <code>/v1</code> 即可，应用会自动补上 <code>/chat/completions</code>。若已包含完整路径则原样使用。也支持 Azure OpenAI 的完整 completions URL。点「探测模型」会请求该地址的 <code>/models</code>。
             </Hint>
           </label>
-          <label>
+          <label className="span-2">
             模型名
-            <input
-              value={form.llmModel || ""}
-              onChange={(e) => set("llmModel", e.target.value)}
-              placeholder="gpt-4o-mini"
-              autoComplete="off"
-            />
-            <Hint>
-              与服务商控制台里的模型 ID 一致，例如 <code>deepseek-chat</code>、<code>qwen-plus</code>。
-            </Hint>
+            <div className="path-row">
+              <input
+                value={form.llmModel || ""}
+                onChange={(e) => set("llmModel", e.target.value)}
+                placeholder="gpt-4o-mini"
+                autoComplete="off"
+                list="llm-model-suggest"
+              />
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={llmProbeBusy}
+                onClick={() => void probeLlmModels()}
+              >
+                {llmProbeBusy ? <Loader2 size={15} className="spin" /> : <Search size={15} />}
+                {llmProbeBusy ? "探测中" : "探测模型"}
+              </button>
+            </div>
+            {llmModels.length > 0 ? (
+              <datalist id="llm-model-suggest">
+                {llmModels.slice(0, 200).map((id) => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+            ) : null}
+            {llmProbeError ? <small className="warn-text">{llmProbeError}</small> : null}
+            {llmProbeHint && !llmProbeError ? <Hint>{llmProbeHint}，点击填入。也可继续手动输入。</Hint> : null}
+            {!llmProbeHint && !llmProbeError ? (
+              <Hint>
+                与服务商控制台里的模型 ID 一致。填写地址和 Key 后可探测接口上的全部模型。
+              </Hint>
+            ) : null}
+            {llmModels.length > 8 ? (
+              <input
+                value={llmModelQuery}
+                onChange={(e) => setLlmModelQuery(e.target.value)}
+                placeholder="筛选模型…"
+                autoComplete="off"
+              />
+            ) : null}
+            {llmModels.length > 0 ? (
+              <div className="llm-model-list">
+                {llmModelShown.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={form.llmModel === id ? "on" : ""}
+                    title={id}
+                    onClick={() => set("llmModel", id)}
+                  >
+                    {id}
+                  </button>
+                ))}
+                {llmModelMatches.length > llmModelShown.length ? (
+                  <span className="llm-model-more">还有 {llmModelMatches.length - llmModelShown.length} 个，请缩小筛选</span>
+                ) : null}
+                {llmModels.length > 0 && llmModelMatches.length === 0 ? (
+                  <span className="llm-model-more">没有匹配的模型</span>
+                ) : null}
+              </div>
+            ) : null}
           </label>
-          <label>
+          <label className="span-2">
             API Key
             <input
               type="password"
@@ -398,7 +585,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             <Hint>本地 Ollama 可留空。已保存过的 Key 留空表示不修改，不会被清空。</Hint>
           </label>
         </div>
+          </>
+        ) : null}
 
+        {section === "r2" ? (
+          <>
         <h3>Cloudflare R2</h3>
         <p className="section-hint">
           粘贴或拖入图片时上传到对象存储，并插入公开 URL。整组留空则改为保存到当前文章旁边的资源目录。可在 Cloudflare 控制台 → R2 → 管理 API 令牌 中创建密钥。
@@ -456,7 +647,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             <Hint>对象在桶里的路径前缀，默认 `hexo`。实际上传键类似 `hexo/2026/08/20/abc123-封面.png`。</Hint>
           </label>
         </div>
+          </>
+        ) : null}
 
+        {section === "ssh" ? (
+          <>
         <h3>SSH / SFTP</h3>
         <p className="section-hint">
           用于拉取、推送 Markdown，以及在服务器上执行 `hexo generate` / `hexo deploy`。密码和私钥二选一即可，推荐私钥。
@@ -573,7 +768,11 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             <Hint>保存当前打开的文章时，自动把该 Markdown 和同名资源目录推到服务器。需先填好 SSH，并保持连接或允许自动连接。</Hint>
           </span>
         </label>
+          </>
+        ) : null}
 
+        {section === "backup" ? (
+          <>
         <h3>导入 / 导出</h3>
         <p className="section-hint">
           备份已保存的设置（含密钥和文章模板）到 JSON，或从文件恢复。文件请妥善保管，不要发到公开仓库。换电脑后，博客目录和 SSH 私钥路径可能要再选一次。
@@ -611,6 +810,10 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
             <Upload size={15} />
             导入配置…
           </button>
+        </div>
+          </>
+        ) : null}
+          </div>
         </div>
 
         <footer>

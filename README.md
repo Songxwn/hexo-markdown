@@ -32,7 +32,7 @@
 
 ## 能做什么
 
-- 编辑 `source/_posts`、`source/_drafts`，实时预览 GFM（表格、任务列表、代码高亮、**Mermaid 流程图**）
+- 编辑 `source/_posts`、`source/_drafts`，实时预览 GFM（表格、任务列表、**代码高亮 / 行号 / 复制**、**Mermaid 流程图**）
 - 识别常见 Hexo 标签：`asset_img`、`img`、`blockquote`、`codeblock`、`raw`
 - 新建文章套用模板；文件名只用标题，**不加日期前缀**（日期写在 front-matter）
 - 粘贴 / 拖入 / 工具栏选图：有 R2 则上传并插入公开 URL；没有则存到文章资源目录
@@ -157,7 +157,7 @@ Hexo 默认常用文件名当 permalink。点状态栏路径，或菜单 **文�
 ![](https://img.example.com/hexo/2026/08/20/xxxx-封面.png)
 ```
 
-对象键默认前缀 `hexo`，可在设置里改。
+对象键默认前缀 `hexo`，可在设置里改。上传过程会写到远程日志（对象键和公开 URL）。
 
 **未配置 R2**
 
@@ -172,7 +172,7 @@ Markdown 里写相对文件名。预览会按 Hexo 文章资源目录解析；�
 
 ### 5. 预览、大纲与大图
 
-- 预览支持 GFM、Mermaid 流程图，以及上面列出的 Hexo 标签。
+- 预览支持 GFM、代码块（语言、文件名、行号、高亮行、复制）、Mermaid 流程图，以及上面列出的 Hexo 标签。
 - 拖左边源码滚动时，右边预览会跟到对应段落。
 - **大纲**：`Ctrl+Shift+O` 或工具栏大纲按钮。点击标题会同时跳转预览和编辑器；预览滚动时会高亮当前标题。
 - **单击预览中的图片** 全屏查看。再单击图片或空白处关闭；也可点「关闭」或按 `Esc`。滚轮缩放，放大后可拖动（拖动不会关掉）。
@@ -190,6 +190,33 @@ flowchart TD
 ````
 
 也支持 Hexo 标签 `{% mermaid %} ... {% endmermaid %}`。语法错误时预览会显示报错，源码仍可见。皮肤切换后流程图会按浅色 / 深色重绘。
+
+**代码块**
+
+围栏代码会显示语言、复制按钮；两行及以上自动加行号。也识别 Hexo `{% codeblock %}` 的标题、语言、链接、行号起点和高亮行。
+
+````markdown
+```js:app.ts {2,4-5}
+export function hello(name) {
+  const text = `hi, ${name}`
+  console.log(text)
+  return text
+}
+```
+````
+
+常用写法：
+
+| 写法 | 效果 |
+| --- | --- |
+| 信息行写 `js` / `ts` / `python` | 语言标签 + 高亮 |
+| `js:app.ts` 或 `title="app.ts"` | 显示文件名 |
+| `{2,4-5}` 或 `mark=2,4-5` | 高亮指定行 |
+| `first_line=10` | 行号从 10 起 |
+| `line_number=false` | 不显示行号 |
+| `wrap=false` | 长行横向滚动 |
+
+Hexo 标签示例：`{% codeblock app.ts lang:js mark:2,4-5 %} ... {% endcodeblock %}`。
 
 ### 6. 外观、字体和字号
 
@@ -299,7 +326,8 @@ Access Key 不是 Cloudflare 登录邮箱。Secret 只显示一次；已经保�
 
 地址填到 `/v1`（或服务商给出的 compatible 根路径）即可，应用会补上 `/chat/completions`。若你粘贴的已经是完整 completions URL，则原样使用。
 
-- **模型名**必须和服务商控制台一致。
+- **探测模型**：填好地址（云服务还需 Key）后点「探测模型」，会请求该接口的 `/models`（Ollama 也会试 `/api/tags`），列出全部模型，点击即可填入。
+- **模型名**必须和服务商控制台一致，也可手动输入。
 - **API Key**：云服务必填；本地 Ollama 可留空。已保存过的 Key 再次打开设置留空表示不修改。
 - 也可用其它兼容网关（One API、New API、Azure OpenAI 完整 URL 等），只要走 `chat/completions`。
 
@@ -369,7 +397,7 @@ source ~/.nvm/nvm.sh 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true
 请用「视图 → 文字大小」，不要用系统级页面缩放。字号只影响文字。
 
 **LLM 请求失败**  
-确认接口地址是 OpenAI 兼容的 `/v1` 或完整 `.../chat/completions`，模型名与控制台一致，Key 有效。Ollama 需先在本机 `ollama serve` 并拉好模型，Key 可留空。公司网关若禁止流式输出，应用会在报错信息含 stream 时自动改成非流式重试。
+确认接口地址是 OpenAI 兼容的 `/v1` 或完整 `.../chat/completions`，模型名与控制台一致，Key 有效。可在设置里点「探测模型」核对接口是否返回该模型。Ollama 需先在本机 `ollama serve` 并拉好模型，Key 可留空。公司网关若禁止流式输出，应用会在报错信息含 stream 时自动改成非流式重试。
 
 **换电脑后配置没了**  
 在旧电脑导出配置，到新电脑导入。博客根目录和私钥文件路径可能要重新选择。
@@ -409,6 +437,6 @@ npm run dist:linux
 - 推送 `v*` 标签：发布正式版本
 
 ```bash
-git tag v1.2.10
-git push origin v1.2.10
+git tag v1.2.11
+git push origin v1.2.11
 ```
