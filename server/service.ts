@@ -23,6 +23,7 @@ import {
   sshSaveRemoteAsset,
   sshWriteRemotePost,
 } from "./ssh";
+import { applyConfigBackup, buildConfigBackup } from "./backup";
 import { listTemplates, saveTemplates } from "./templates";
 import { isLlmConfigured } from "./llm";
 import { normalizeTheme } from "./theme";
@@ -147,6 +148,19 @@ export function updateSettings(body: Partial<AppConfig> & Record<string, unknown
   }
   saveConfig({ ...current, ...patch });
   return publicConfig();
+}
+
+export function exportSettingsBackup() {
+  return buildConfigBackup();
+}
+
+export function importSettingsBackup(raw: unknown) {
+  applyConfigBackup(raw);
+  const cfg = loadConfig();
+  return {
+    settings: publicConfig(),
+    templates: listTemplates(cfg.hexoRoot),
+  };
 }
 
 function isRemote(origin?: PostOrigin | string | null): boolean {

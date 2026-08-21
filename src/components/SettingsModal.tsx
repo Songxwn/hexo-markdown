@@ -1,4 +1,4 @@
-import { FolderOpen, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Download, FolderOpen, KeyRound, Plus, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { LLM_PRESETS } from "../lib/llm";
@@ -24,6 +24,8 @@ type Props = {
   version?: string;
   onClose: () => void;
   onSave: (patch: Partial<AppSettings>, templates: TemplateSet) => Promise<void>;
+  onExport: () => Promise<void>;
+  onImport: () => Promise<void>;
 };
 
 const empty: Partial<AppSettings> = {
@@ -79,10 +81,11 @@ function Hint({ children }: { children: React.ReactNode }) {
   return <small className="field-hint">{children}</small>;
 }
 
-export function SettingsModal({ open, settings, templates, saving, version, onClose, onSave }: Props) {
+export function SettingsModal({ open, settings, templates, saving, version, onClose, onSave, onExport, onImport }: Props) {
   const [form, setForm] = useState(empty);
   const [tpl, setTpl] = useState(cloneUserTemplates(templates));
   const [activeTpl, setActiveTpl] = useState(tpl.defaultId);
+  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
     if (open && settings) {
@@ -571,15 +574,54 @@ export function SettingsModal({ open, settings, templates, saving, version, onCl
           </span>
         </label>
 
+        <h3>导入 / 导出</h3>
+        <p className="section-hint">
+          备份已保存的设置（含密钥和文章模板）到 JSON，或从文件恢复。文件请妥善保管，不要发到公开仓库。换电脑后，博客目录和 SSH 私钥路径可能要再选一次。
+        </p>
+        <div className="backup-row">
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={saving || transferring}
+            onClick={async () => {
+              setTransferring(true);
+              try {
+                await onExport();
+              } finally {
+                setTransferring(false);
+              }
+            }}
+          >
+            <Download size={15} />
+            导出配置…
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={saving || transferring}
+            onClick={async () => {
+              setTransferring(true);
+              try {
+                await onImport();
+              } finally {
+                setTransferring(false);
+              }
+            }}
+          >
+            <Upload size={15} />
+            导入配置…
+          </button>
+        </div>
+
         <footer>
           {version ? <span className="modal-version">版本 {version}</span> : <span />}
-          <button className="btn ghost" type="button" onClick={onClose} disabled={saving}>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={saving || transferring}>
             取消
           </button>
           <button
             className="btn primary"
             type="button"
-            disabled={saving}
+            disabled={saving || transferring}
             onClick={() =>
               onSave(form, {
                 defaultId: tpl.defaultId,

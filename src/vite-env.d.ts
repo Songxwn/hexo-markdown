@@ -19,6 +19,12 @@ type HexoDesktopAPI = {
   appInfo: () => Promise<AppInfo>;
   settings: () => Promise<AppSettings>;
   saveSettings: (body: Partial<AppSettings>) => Promise<AppSettings>;
+  exportSettings: () => Promise<{ canceled: boolean; path?: string }>;
+  importSettings: () => Promise<{
+    canceled: boolean;
+    settings?: AppSettings;
+    templates?: TemplateSet;
+  }>;
   posts: () => Promise<PostSummary[]>;
   remotePosts: () => Promise<PostSummary[]>;
   readPost: (path: string, origin?: PostOrigin) => Promise<{ path: string; content: string }>;

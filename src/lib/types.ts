@@ -98,6 +98,8 @@ export type MenuAction =
   | "save"
   | "rename"
   | "settings"
+  | "export-config"
+  | "import-config"
   | "about"
   | "outline"
   | "llm"

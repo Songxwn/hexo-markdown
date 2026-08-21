@@ -1805,6 +1805,13 @@ kbd {
   margin: 0 0 12px;
 }
 
+.backup-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+}
+
 .template-toolbar select {
   flex: 1;
   min-width: 140px;

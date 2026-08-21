@@ -421,6 +421,32 @@ export default function App() {
     [notify, refreshPosts],
   );
 
+  const exportSettings = useCallback(async () => {
+    try {
+      const result = await api.exportSettings();
+      if (result.canceled) return;
+      notify("ok", "配置已导出");
+    } catch (error) {
+      notify("err", error instanceof Error ? error.message : "导出配置失败");
+    }
+  }, [notify]);
+
+  const importSettings = useCallback(async () => {
+    try {
+      const result = await api.importSettings();
+      if (result.canceled || !result.settings) return;
+      setSettings(result.settings);
+      if (result.templates) setTemplates(result.templates);
+      applyTheme(normalizeTheme(result.settings.theme));
+      applyTypography(result.settings.fontFamily, result.settings.fontSize);
+      notify("ok", "配置已导入");
+      if (result.settings.hexoValid) await refreshPosts();
+      else setPosts([]);
+    } catch (error) {
+      notify("err", error instanceof Error ? error.message : "导入配置失败");
+    }
+  }, [notify, refreshPosts]);
+
   const handlePasteImage = useCallback(
     async (file: File) => {
       const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -528,6 +554,8 @@ export default function App() {
           openRename(path, undefined, editingOrigin);
         }
         if (action === "settings") setSettingsOpen(true);
+        if (action === "export-config") void exportSettings();
+        if (action === "import-config") void importSettings();
         if (action === "about") setAboutOpen(true);
         if (action === "outline") toggleOutline();
         if (action === "llm") toggleLlm();
@@ -563,7 +591,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [editingOrigin, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
+  }, [editingOrigin, exportSettings, importSettings, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -863,6 +891,8 @@ export default function App() {
           setSettingsOpen(false);
         }}
         onSave={saveSettings}
+        onExport={exportSettings}
+        onImport={importSettings}
       />
       <NewPostModal
         open={newOpen}

@@ -33,6 +33,18 @@ export const api = {
     return desktop().saveSettings(body);
   },
 
+  exportSettings(): Promise<{ canceled: boolean; path?: string }> {
+    return desktop().exportSettings();
+  },
+
+  importSettings(): Promise<{
+    canceled: boolean;
+    settings?: AppSettings;
+    templates?: TemplateSet;
+  }> {
+    return desktop().importSettings();
+  },
+
   posts(): Promise<PostSummary[]> {
     return desktop().posts();
   },

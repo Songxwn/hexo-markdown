@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -43,6 +43,8 @@ import {
   updateSettings,
   updateTemplates,
   uploadImage,
+  exportSettingsBackup,
+  importSettingsBackup,
 } from "../server/service";
 import {
   setSshHooks,
@@ -261,6 +263,9 @@ function createMenu(): void {
         { label: "新建文章", accelerator: "CmdOrCtrl+N", click: () => sendMenu("new") },
         { label: "保存", accelerator: "CmdOrCtrl+S", click: () => sendMenu("save") },
         { label: "重命名文件…", click: () => sendMenu("rename") },
+        { type: "separator" },
+        { label: "导出配置…", click: () => sendMenu("export-config") },
+        { label: "导入配置…", click: () => sendMenu("import-config") },
         ...fileExtra,
       ],
     },
@@ -390,6 +395,57 @@ function registerIpc(): void {
     applyWindowChrome(normalizeTheme(next.theme));
     createMenu();
     return next;
+  });
+  handle("settings:export", async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    if (!win) return { canceled: true };
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const result = await dialog.showSaveDialog(win, {
+      title: "导出配置",
+      defaultPath: join(app.getPath("documents"), `hexo-markdown-config-${stamp}.json`),
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    writeFileSync(result.filePath, JSON.stringify(exportSettingsBackup(), null, 2), "utf8");
+    return { canceled: false, path: result.filePath };
+  });
+  handle("settings:import", async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    if (!win) return { canceled: true };
+    const picked = await dialog.showOpenDialog(win, {
+      title: "导入配置",
+      properties: ["openFile"],
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      defaultPath: app.getPath("documents"),
+    });
+    if (picked.canceled || !picked.filePaths[0]) return { canceled: true };
+    const confirm = await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["取消", "导入并覆盖"],
+      defaultId: 1,
+      cancelId: 0,
+      title: "导入配置",
+      message: "用文件中的设置覆盖当前配置？",
+      detail: "会写入密钥、SSH、LLM 和文章模板。博客目录、私钥路径若在另一台电脑上，导入后可能需要再改一次。",
+    });
+    if (confirm.response !== 1) return { canceled: true };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(picked.filePaths[0], "utf8"));
+    } catch {
+      throw new Error("配置文件不是有效的 JSON");
+    }
+    const imported = importSettingsBackup(parsed);
+    applyWindowChrome(normalizeTheme(imported.settings.theme));
+    mainWindow?.webContents.send("theme", imported.settings.theme);
+    mainWindow?.webContents.send("typography", {
+      fontFamily: imported.settings.fontFamily,
+      fontSize: imported.settings.fontSize,
+    });
+    createMenu();
+    return { canceled: false, settings: imported.settings, templates: imported.templates };
   });
   handle("templates:get", () => getTemplates());
   handle("templates:save", (body) => updateTemplates((body || {}) as Partial<TemplateSet>));

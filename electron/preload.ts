@@ -5,6 +5,8 @@ export type MenuAction =
   | "save"
   | "rename"
   | "settings"
+  | "export-config"
+  | "import-config"
   | "about"
   | "outline"
   | "llm"
@@ -22,6 +24,8 @@ const api = {
   appInfo: () => ipcRenderer.invoke("app:info"),
   settings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (body: unknown) => ipcRenderer.invoke("settings:save", body),
+  exportSettings: () => ipcRenderer.invoke("settings:export"),
+  importSettings: () => ipcRenderer.invoke("settings:import"),
   posts: () => ipcRenderer.invoke("posts:list"),
   remotePosts: () => ipcRenderer.invoke("posts:remote-list"),
   readPost: (path: string, origin?: "local" | "remote") =>
