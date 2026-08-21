@@ -221,6 +221,21 @@ export default function App() {
       } catch {
         /* ignore */
       }
+      if (next.sshConfigured) {
+        try {
+          const info = await api.sshConnect();
+          setSsh(await api.sshStatus());
+          notify("ok", `已连接 ${info.user}@${info.host}`);
+        } catch (error) {
+          try {
+            setSsh(await api.sshStatus());
+          } catch {
+            /* ignore */
+          }
+          setLogOpen(true);
+          notify("err", error instanceof Error ? error.message : "自动连接 SSH 失败");
+        }
+      }
       if (next.hexoValid) await refreshPosts();
       else setSettingsOpen(true);
     } catch (error) {

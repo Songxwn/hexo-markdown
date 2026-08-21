@@ -47,6 +47,7 @@ import {
   importSettingsBackup,
 } from "../server/service";
 import {
+  isSshConfigured,
   setSshHooks,
   sshConnect,
   sshDisconnect,
@@ -698,6 +699,13 @@ if (!gotLock) {
     registerIpc();
     createMenu();
     await createWindow();
+    if (isSshConfigured()) {
+      void sshConnect().catch((error) => {
+        const text = error instanceof Error ? error.message : String(error);
+        mainWindow?.webContents.send("ssh:log", { kind: "err", text, ts: Date.now() });
+        mainWindow?.webContents.send("ssh:status", sshStatus());
+      });
+    }
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
