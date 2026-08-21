@@ -1,8 +1,11 @@
 import { Cloud, FileText, Pencil, Plug, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PostOrigin, PostSummary, SshStatus } from "../lib/types";
 
 export type SidebarTab = "all" | "posts" | "drafts";
+
+type Tip = { text: string; left: number; top: number; below: boolean };
 
 type Props = {
   posts: PostSummary[];
@@ -20,7 +23,20 @@ type Props = {
   onDelete: (post: PostSummary) => void;
   onConnect: () => void;
   onOpenSettings: () => void;
+  onResizeStart: (e: React.MouseEvent) => void;
 };
+
+function tipFromEl(el: HTMLElement, text: string): Tip {
+  const rect = el.getBoundingClientRect();
+  const spaceRight = window.innerWidth - rect.right;
+  const below = spaceRight < 180;
+  return {
+    text,
+    left: below ? Math.max(8, rect.left) : rect.right + 10,
+    top: below ? rect.bottom + 8 : rect.top + rect.height / 2,
+    below,
+  };
+}
 
 export function Sidebar({
   posts,
@@ -38,8 +54,12 @@ export function Sidebar({
   onDelete,
   onConnect,
   onOpenSettings,
+  onResizeStart,
 }: Props) {
   const [query, setQuery] = useState("");
+  const [tip, setTip] = useState<Tip | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const tipTimer = useRef(0);
 
   const visible = useMemo(() => {
     const source =
@@ -55,6 +75,29 @@ export function Sidebar({
   }, [posts, remotePosts, query, tab]);
 
   const draftCount = posts.filter((p) => p.folder === "drafts").length;
+
+  const hideTip = () => {
+    window.clearTimeout(tipTimer.current);
+    setTip(null);
+  };
+
+  const showTip = (el: HTMLElement, text: string) => {
+    window.clearTimeout(tipTimer.current);
+    const title = text.trim();
+    if (!title) return;
+    tipTimer.current = window.setTimeout(() => {
+      setTip(tipFromEl(el, title));
+    }, 280);
+  };
+
+  useEffect(() => () => window.clearTimeout(tipTimer.current), []);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    list.addEventListener("scroll", hideTip, { passive: true });
+    return () => list.removeEventListener("scroll", hideTip);
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -77,7 +120,7 @@ export function Sidebar({
           草稿 {draftCount}
         </button>
       </div>
-      <div className="post-list">
+      <div className="post-list" ref={listRef}>
         {tab === "posts" && !sshConfigured && (
           <div className="muted-block">
             <p>配置 SSH 后可实时查看服务器已发布文章</p>
@@ -112,6 +155,8 @@ export function Sidebar({
               key={`${post.origin}:${post.path}`}
               className={`post-item ${active ? "active" : ""}`}
               onClick={() => onOpen(post)}
+              onMouseEnter={(e) => showTip(e.currentTarget, post.title)}
+              onMouseLeave={hideTip}
             >
               {post.origin === "remote" ? <Cloud size={15} /> : <FileText size={15} />}
               <span className="post-item-body">
@@ -127,6 +172,7 @@ export function Sidebar({
                   title="修改文件名（文章链接）"
                   onClick={(e) => {
                     e.stopPropagation();
+                    hideTip();
                     onRename(post);
                   }}
                 >
@@ -137,6 +183,7 @@ export function Sidebar({
                   title="删除"
                   onClick={(e) => {
                     e.stopPropagation();
+                    hideTip();
                     onDelete(post);
                   }}
                 >
@@ -147,6 +194,23 @@ export function Sidebar({
           );
         })}
       </div>
+      <div
+        className="sidebar-resizer"
+        title="拖动调整宽度"
+        onMouseDown={onResizeStart}
+      />
+      {tip
+        ? createPortal(
+            <div
+              className={`post-title-tip${tip.below ? " below" : ""}`}
+              style={{ left: tip.left, top: tip.top }}
+              role="tooltip"
+            >
+              {tip.text}
+            </div>,
+            document.body,
+          )
+        : null}
     </aside>
   );
 }

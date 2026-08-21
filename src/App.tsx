@@ -54,6 +54,25 @@ function readLlmOpen(): boolean {
   }
 }
 
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 520;
+const SIDEBAR_DEFAULT = 280;
+
+function clampSidebarWidth(width: number, bodyWidth = typeof window === "undefined" ? 1200 : window.innerWidth) {
+  const max = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, bodyWidth - 360));
+  return Math.round(Math.min(max, Math.max(SIDEBAR_MIN, width)));
+}
+
+function readSidebarWidth(): number {
+  try {
+    const raw = Number(window.localStorage.getItem("hexomd.sidebarWidth"));
+    if (Number.isFinite(raw) && raw > 0) return clampSidebarWidth(raw);
+  } catch {
+    /* ignore quota */
+  }
+  return SIDEBAR_DEFAULT;
+}
+
 export default function App() {
   const editorRef = useRef<EditorHandle>(null);
   const previewRef = useRef<PreviewHandle>(null);
@@ -70,6 +89,7 @@ export default function App() {
   const [content, setContent] = useState("");
   const [saved, setSaved] = useState("");
   const [split, setSplit] = useState(52);
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string; origin: PostOrigin } | null>(null);
@@ -528,6 +548,16 @@ export default function App() {
   }, [refreshRemotePosts, sidebarTab, ssh.busy, ssh.connected]);
 
   useEffect(() => {
+    const onResize = () => {
+      const body = document.querySelector(".body") as HTMLElement | null;
+      const width = body?.getBoundingClientRect().width ?? window.innerWidth;
+      setSidebarWidth((current) => clampSidebarWidth(current, width));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
     try {
       const offLog = api.onSshLog((event) => {
         setSshLogs((prev) => [...prev.slice(-400), event]);
@@ -625,6 +655,33 @@ export default function App() {
     window.addEventListener("mouseup", onUp);
   }
 
+  function startSidebarResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const body = document.querySelector(".body") as HTMLElement | null;
+    if (!body) return;
+    body.classList.add("is-resizing-sidebar");
+    const onMove = (ev: MouseEvent) => {
+      const rect = body.getBoundingClientRect();
+      setSidebarWidth(clampSidebarWidth(ev.clientX - rect.left, rect.width));
+    };
+    const onUp = () => {
+      body.classList.remove("is-resizing-sidebar");
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setSidebarWidth((width) => {
+        const next = clampSidebarWidth(width, body.getBoundingClientRect().width);
+        try {
+          window.localStorage.setItem("hexomd.sidebarWidth", String(next));
+        } catch {
+          /* ignore quota */
+        }
+        return next;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   const pickImage = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -637,7 +694,7 @@ export default function App() {
   };
 
   return (
-    <div className="shell">
+    <div className="shell" style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
       <header className="titlebar">
         <div className="brand">
           <span className="mark" aria-hidden />
@@ -699,6 +756,7 @@ export default function App() {
           onDelete={(p) => void deletePost(p)}
           onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
           onOpenSettings={() => setSettingsOpen(true)}
+          onResizeStart={startSidebarResize}
         />
 
         <section className="workspace">
