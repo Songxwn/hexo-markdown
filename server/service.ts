@@ -6,6 +6,7 @@ import {
   listPosts,
   readPost,
   renamePost as renamePostFile,
+  movePost as movePostFile,
   resolveMedia,
   saveLocalAsset,
   validateHexoRoot,
@@ -223,6 +224,12 @@ export function renamePost(rel: string, nextName: string, origin?: PostOrigin | 
   if (!rel) throw new Error("缺少 path");
   if (isRemote(origin)) return sshRenameRemotePost(rel, nextName);
   return renamePostFile(requireHexo().hexoRoot, rel, nextName);
+}
+
+export function movePost(rel: string, toFolder: PostFolder, origin?: PostOrigin | null) {
+  if (!rel) throw new Error("缺少 path");
+  if (isRemote(origin)) throw new Error("远程文章已在已发布目录，无需再移动");
+  return movePostFile(requireHexo().hexoRoot, rel, toFolder === "drafts" ? "drafts" : "posts");
 }
 
 export function mediaAbsolutePath(rel: string) {

@@ -97,6 +97,7 @@ export type MenuAction =
   | "new"
   | "save"
   | "rename"
+  | "publish"
   | "settings"
   | "export-config"
   | "import-config"

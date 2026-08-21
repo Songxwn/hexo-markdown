@@ -86,6 +86,10 @@ export const api = {
     return desktop().renamePost(path, name, origin);
   },
 
+  movePost(path: string, folder: PostFolder, origin: PostOrigin = "local"): Promise<{ path: string }> {
+    return desktop().movePost(path, folder, origin);
+  },
+
   async uploadImage(file: File, postPath: string | null, origin: PostOrigin = "local"): Promise<UploadResult> {
     const data = await file.arrayBuffer();
     return desktop().uploadImage({

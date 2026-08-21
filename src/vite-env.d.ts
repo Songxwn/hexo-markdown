@@ -39,6 +39,7 @@ type HexoDesktopAPI = {
   saveTemplates: (body: Partial<TemplateSet>) => Promise<TemplateSet>;
   deletePost: (path: string, origin?: PostOrigin) => Promise<void>;
   renamePost: (path: string, name: string, origin?: PostOrigin) => Promise<{ path: string }>;
+  movePost: (path: string, folder: PostFolder, origin?: PostOrigin) => Promise<{ path: string }>;
   uploadImage: (payload: {
     name: string;
     type: string;

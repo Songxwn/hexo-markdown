@@ -192,6 +192,64 @@ export function renamePost(hexoRoot: string, relPath: string, nextName: string):
   return { path: toRel };
 }
 
+function folderOf(relPath: string): PostFolder {
+  return relPath.replace(/\\/g, "/").startsWith("source/_drafts/") ? "drafts" : "posts";
+}
+
+function uniqueRelInDir(hexoRoot: string, dirRel: string, filename: string): string {
+  const stem = filename.replace(/\.md$/i, "");
+  for (let n = 0; n < 200; n++) {
+    const name = n === 0 ? filename : sanitizePostFilename(`${stem}-${n + 1}`);
+    const relPath = `${dirRel}/${name}`;
+    if (!existsSync(resolveRel(hexoRoot, relPath))) return relPath;
+  }
+  throw new Error("无法生成不重复的文件名");
+}
+
+export function movePost(hexoRoot: string, relPath: string, toFolder: PostFolder): { path: string } {
+  const fromRel = relPath.replace(/\\/g, "/");
+  if (!fromRel.toLowerCase().endsWith(".md")) {
+    throw new Error("只能移动 Markdown 文件");
+  }
+  if (folderOf(fromRel) === toFolder) {
+    return { path: fromRel };
+  }
+  if (toFolder !== "posts" || folderOf(fromRel) !== "drafts") {
+    throw new Error("只能把本地草稿移到已发布");
+  }
+
+  const fromAbs = resolveRel(hexoRoot, fromRel);
+  if (!existsSync(fromAbs) || !statSync(fromAbs).isFile()) {
+    throw new Error("文章不存在");
+  }
+
+  const rest = fromRel.replace(/^source\/_drafts\//, "");
+  const destRoot = FOLDER_MAP.posts;
+  const destDir = rest.includes("/") ? `${destRoot}/${rest.split("/").slice(0, -1).join("/")}` : destRoot;
+  const filename = rest.split("/").pop() || "";
+  let toRel = `${destDir}/${filename}`;
+  let toAbs = resolveRel(hexoRoot, toRel);
+  if (existsSync(toAbs)) {
+    toRel = uniqueRelInDir(hexoRoot, destDir, filename);
+    toAbs = resolveRel(hexoRoot, toRel);
+  }
+
+  mkdirSync(dirname(toAbs), { recursive: true });
+
+  const fromAsset = fromAbs.replace(/\.md$/i, "");
+  const toAsset = toAbs.replace(/\.md$/i, "");
+  const hasAsset = existsSync(fromAsset) && statSync(fromAsset).isDirectory();
+  if (hasAsset && existsSync(toAsset)) {
+    throw new Error("目标资源目录已存在");
+  }
+
+  movePath(fromAbs, toAbs);
+  if (hasAsset) {
+    movePath(fromAsset, toAsset);
+  }
+  return { path: toRel };
+}
+
 export function slugifyTitle(title: string): string {
   const slug = title
     .trim()

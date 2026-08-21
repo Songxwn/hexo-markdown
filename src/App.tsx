@@ -434,6 +434,49 @@ export default function App() {
     [editingOrigin, notify, path, refreshPosts, refreshRemotePosts, renameTarget?.origin],
   );
 
+  const publishDraft = useCallback(
+    async (post: PostSummary) => {
+      if (post.origin === "remote" || post.folder !== "drafts") {
+        notify("err", "只能发布本地草稿");
+        return;
+      }
+      if (!window.confirm(`把「${post.title}」从草稿移到 source/_posts？`)) return;
+      try {
+        if (path === post.path && editingOrigin === "local" && dirty) {
+          await api.savePost(post.path, content, "local");
+          setSaved(content);
+        }
+        const fromPath = post.path;
+        const result = await api.movePost(fromPath, "posts", "local");
+        if (path === fromPath && editingOrigin === "local") {
+          setPath(result.path);
+        }
+        const filename = result.path.split("/").pop() || result.path;
+        await refreshPosts();
+        if (settings?.autoUploadOnSave && settings.sshConfigured && ssh.connected) {
+          setLogOpen(true);
+          await api.sshPush(result.path);
+          notify("ok", `已发布并推送 ${filename}`);
+        } else {
+          notify("ok", `已发布到 source/_posts / ${filename}`);
+        }
+      } catch (error) {
+        notify("err", error instanceof Error ? error.message : "发布失败");
+      }
+    },
+    [
+      content,
+      dirty,
+      editingOrigin,
+      notify,
+      path,
+      refreshPosts,
+      settings?.autoUploadOnSave,
+      settings?.sshConfigured,
+      ssh.connected,
+    ],
+  );
+
   const saveSettings = useCallback(
     async (patch: Partial<AppSettings>, nextTemplates: TemplateSet) => {
       setSavingSettings(true);
@@ -599,6 +642,21 @@ export default function App() {
           }
           openRename(path, undefined, editingOrigin);
         }
+        if (action === "publish") {
+          if (!path || editingOrigin !== "local" || !path.replace(/\\/g, "/").startsWith("source/_drafts/")) {
+            notify("err", "请先打开一篇本地草稿");
+            return;
+          }
+          void publishDraft({
+            path,
+            name: path.split("/").pop() || path,
+            folder: "drafts",
+            title: parseTitle(content) || path.split("/").pop() || "草稿",
+            date: "",
+            mtime: 0,
+            origin: "local",
+          });
+        }
         if (action === "settings") setSettingsOpen(true);
         if (action === "export-config") void exportSettings();
         if (action === "import-config") void importSettings();
@@ -637,7 +695,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [editingOrigin, exportSettings, importSettings, notify, openRename, path, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
+  }, [content, editingOrigin, exportSettings, importSettings, notify, openRename, path, publishDraft, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -754,6 +812,7 @@ export default function App() {
           remoteError={remoteError}
           onOpen={(p) => void openPost(p)}
           onRename={(p) => openRename(p.path, p.name, p.origin)}
+          onPublish={(p) => void publishDraft(p)}
           onDelete={(p) => void deletePost(p)}
           onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
           onOpenSettings={() => setSettingsOpen(true)}

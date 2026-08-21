@@ -4,6 +4,7 @@ export type MenuAction =
   | "new"
   | "save"
   | "rename"
+  | "publish"
   | "settings"
   | "export-config"
   | "import-config"
@@ -44,6 +45,8 @@ const api = {
     ipcRenderer.invoke("posts:delete", { path, origin }),
   renamePost: (path: string, name: string, origin?: "local" | "remote") =>
     ipcRenderer.invoke("posts:rename", { path, name, origin }),
+  movePost: (path: string, folder: "posts" | "drafts", origin?: "local" | "remote") =>
+    ipcRenderer.invoke("posts:move", { path, folder, origin }),
   uploadImage: (payload: {
     name: string;
     type: string;

@@ -1,4 +1,4 @@
-import { Cloud, FileText, Pencil, Plug, Search, Trash2 } from "lucide-react";
+import { Cloud, FileText, Pencil, Plug, Search, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PostOrigin, PostSummary, SshStatus } from "../lib/types";
@@ -20,6 +20,7 @@ type Props = {
   remoteError: string | null;
   onOpen: (post: PostSummary) => void;
   onRename: (post: PostSummary) => void;
+  onPublish: (post: PostSummary) => void;
   onDelete: (post: PostSummary) => void;
   onConnect: () => void;
   onOpenSettings: () => void;
@@ -51,6 +52,7 @@ export function Sidebar({
   remoteError,
   onOpen,
   onRename,
+  onPublish,
   onDelete,
   onConnect,
   onOpenSettings,
@@ -167,6 +169,19 @@ export function Sidebar({
                 </small>
               </span>
               <span className="post-actions">
+                {post.origin === "local" && post.folder === "drafts" ? (
+                  <span
+                    className="post-act"
+                    title="发布到已发布（移到 source/_posts）"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideTip();
+                      onPublish(post);
+                    }}
+                  >
+                    <Send size={13} />
+                  </span>
+                ) : null}
                 <span
                   className="post-act"
                   title="修改文件名（文章链接）"

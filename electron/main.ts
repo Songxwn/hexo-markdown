@@ -40,6 +40,7 @@ import {
   remoteMediaBytes,
   removePost,
   renamePost,
+  movePost,
   updateSettings,
   updateTemplates,
   uploadImage,
@@ -264,6 +265,7 @@ function createMenu(): void {
         { label: "新建文章", accelerator: "CmdOrCtrl+N", click: () => sendMenu("new") },
         { label: "保存", accelerator: "CmdOrCtrl+S", click: () => sendMenu("save") },
         { label: "重命名文件…", click: () => sendMenu("rename") },
+        { label: "发布草稿", click: () => sendMenu("publish") },
         { type: "separator" },
         { label: "导出配置…", click: () => sendMenu("export-config") },
         { label: "导入配置…", click: () => sendMenu("import-config") },
@@ -487,6 +489,10 @@ function registerIpc(): void {
   handle("posts:rename", (payload) => {
     const data = payload as { path?: string; name?: string; origin?: PostOrigin };
     return renamePost(data?.path || "", data?.name || "", data?.origin);
+  });
+  handle("posts:move", (payload) => {
+    const data = payload as { path?: string; folder?: PostFolder; origin?: PostOrigin };
+    return movePost(data?.path || "", data?.folder === "drafts" ? "drafts" : "posts", data?.origin);
   });
   handle("images:upload", async (payload) => {
     const data = payload as {
