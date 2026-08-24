@@ -445,6 +445,6 @@ npm run dist:linux
 - 推送 `v*` 标签：发布正式版本
 
 ```bash
-git tag v1.2.13
-git push origin v1.2.13
+git tag v1.2.14
+git push origin v1.2.14
 ```

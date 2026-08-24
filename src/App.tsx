@@ -297,6 +297,15 @@ export default function App() {
   useEffect(() => {
     editorScrollRef.current = { line: 0, totalLines: 1, atStart: true, atEnd: false };
     setActiveHeadingId(null);
+    if (!path) return;
+    let inner = 0;
+    const outer = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => editorRef.current?.focus());
+    });
+    return () => {
+      window.cancelAnimationFrame(outer);
+      window.cancelAnimationFrame(inner);
+    };
   }, [path, editingOrigin]);
 
   const openPost = useCallback(

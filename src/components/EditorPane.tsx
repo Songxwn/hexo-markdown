@@ -63,6 +63,26 @@ function readScrollPos(view: EditorView): EditorScrollPos {
   };
 }
 
+function wakeEditor(view: EditorView, shouldFocus = false): void {
+  const dom = view.contentDOM;
+  if (dom.getAttribute("contenteditable") !== "true") {
+    dom.setAttribute("contenteditable", "true");
+  }
+  if (dom.tabIndex < 0) {
+    dom.tabIndex = 0;
+  }
+  view.requestMeasure();
+  if (shouldFocus) view.focus();
+}
+
+function canTakeEditorFocus(): boolean {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return true;
+  if (el.closest(".modal-backdrop, .llm-panel")) return false;
+  if (el.closest("input, textarea, select")) return false;
+  return true;
+}
+
 function collectImages(list: FileList | DataTransferItemList | null): File[] {
   if (!list) return [];
   const files: File[] = [];
@@ -166,7 +186,8 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
       view.focus();
     },
     focus() {
-      viewRef.current?.focus();
+      const view = viewRef.current;
+      if (view) wakeEditor(view, true);
     },
   }));
 
@@ -229,8 +250,30 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
     viewRef.current = view;
     const onScrollerScroll = () => onScrollRef.current?.(readScrollPos(view));
     view.scrollDOM.addEventListener("scroll", onScrollerScroll, { passive: true });
-    queueMicrotask(() => onScrollRef.current?.(readScrollPos(view)));
+    const host = parentRef.current;
+    const resize = new ResizeObserver(() => {
+      if (viewRef.current === view) wakeEditor(view);
+    });
+    resize.observe(host);
+    const onWindowFocus = () => {
+      if (viewRef.current === view && canTakeEditorFocus()) wakeEditor(view, true);
+    };
+    window.addEventListener("focus", onWindowFocus);
+    const wake = () => {
+      if (viewRef.current !== view) return;
+      wakeEditor(view, canTakeEditorFocus());
+      onScrollRef.current?.(readScrollPos(view));
+    };
+    queueMicrotask(wake);
+    let innerRaf = 0;
+    const outerRaf = window.requestAnimationFrame(() => {
+      innerRaf = window.requestAnimationFrame(wake);
+    });
     return () => {
+      window.cancelAnimationFrame(outerRaf);
+      window.cancelAnimationFrame(innerRaf);
+      window.removeEventListener("focus", onWindowFocus);
+      resize.disconnect();
       view.scrollDOM.removeEventListener("scroll", onScrollerScroll);
       view.destroy();
       viewRef.current = null;
@@ -241,16 +284,28 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    if (view.state.doc.toString() !== value) {
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: value },
-      });
-      view.scrollDOM.scrollTop = 0;
-      onScrollRef.current?.(readScrollPos(view));
-    }
+    if (view.state.doc.toString() === value) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+      selection: { anchor: 0 },
+    });
+    view.scrollDOM.scrollTop = 0;
+    onScrollRef.current?.(readScrollPos(view));
+    window.requestAnimationFrame(() => {
+      if (viewRef.current === view) wakeEditor(view, canTakeEditorFocus());
+    });
   }, [value]);
 
-  return <div className="editor-host" ref={parentRef} />;
+  return (
+    <div
+      className="editor-host"
+      ref={parentRef}
+      onMouseDown={() => {
+        const view = viewRef.current;
+        if (view) wakeEditor(view, true);
+      }}
+    />
+  );
 });
 
 EditorPane.displayName = "EditorPane";
