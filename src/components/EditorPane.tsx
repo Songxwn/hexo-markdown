@@ -300,9 +300,11 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
     <div
       className="editor-host"
       ref={parentRef}
-      onMouseDown={() => {
+      onMouseDown={(event) => {
         const view = viewRef.current;
-        if (view) wakeEditor(view, true);
+        if (!view) return;
+        if (event.target === view.scrollDOM) return;
+        view.focus();
       }}
     />
   );

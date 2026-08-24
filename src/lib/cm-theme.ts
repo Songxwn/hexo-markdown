@@ -14,6 +14,8 @@ export const inkTheme = EditorView.theme(
       fontFamily: "var(--mono)",
       lineHeight: "1.78",
       fontVariantLigatures: "contextual",
+      minHeight: 0,
+      overflow: "auto",
     },
     ".cm-content": {
       caretColor: "var(--cm-caret)",
