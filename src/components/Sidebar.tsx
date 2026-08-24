@@ -1,4 +1,4 @@
-import { Cloud, FileText, Pencil, Plug, Search, Send, Trash2 } from "lucide-react";
+import { Cloud, FileText, Pencil, Plug, Search, Send, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PostOrigin, PostSummary, SshStatus } from "../lib/types";
@@ -21,6 +21,7 @@ type Props = {
   onOpen: (post: PostSummary) => void;
   onRename: (post: PostSummary) => void;
   onPublish: (post: PostSummary) => void;
+  onUnpublish: (post: PostSummary) => void;
   onDelete: (post: PostSummary) => void;
   onConnect: () => void;
   onOpenSettings: () => void;
@@ -53,6 +54,7 @@ export function Sidebar({
   onOpen,
   onRename,
   onPublish,
+  onUnpublish,
   onDelete,
   onConnect,
   onOpenSettings,
@@ -180,6 +182,23 @@ export function Sidebar({
                     }}
                   >
                     <Send size={13} />
+                  </span>
+                ) : null}
+                {post.folder === "posts" ? (
+                  <span
+                    className="post-act"
+                    title={
+                      post.origin === "remote"
+                        ? "移到本地草稿，并从服务器已发布目录删除"
+                        : "移到草稿（source/_drafts）"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideTip();
+                      onUnpublish(post);
+                    }}
+                  >
+                    <Undo2 size={13} />
                   </span>
                 ) : null}
                 <span

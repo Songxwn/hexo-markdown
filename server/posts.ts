@@ -211,11 +211,14 @@ export function movePost(hexoRoot: string, relPath: string, toFolder: PostFolder
   if (!fromRel.toLowerCase().endsWith(".md")) {
     throw new Error("只能移动 Markdown 文件");
   }
-  if (folderOf(fromRel) === toFolder) {
+  const fromFolder = folderOf(fromRel);
+  if (fromFolder === toFolder) {
     return { path: fromRel };
   }
-  if (toFolder !== "posts" || folderOf(fromRel) !== "drafts") {
-    throw new Error("只能把本地草稿移到已发布");
+
+  const fromPrefix = fromFolder === "drafts" ? "source/_drafts/" : "source/_posts/";
+  if (!fromRel.startsWith(fromPrefix)) {
+    throw new Error("只能移动 source/_posts 或 source/_drafts 下的文章");
   }
 
   const fromAbs = resolveRel(hexoRoot, fromRel);
@@ -223,8 +226,8 @@ export function movePost(hexoRoot: string, relPath: string, toFolder: PostFolder
     throw new Error("文章不存在");
   }
 
-  const rest = fromRel.replace(/^source\/_drafts\//, "");
-  const destRoot = FOLDER_MAP.posts;
+  const rest = fromRel.slice(fromPrefix.length);
+  const destRoot = FOLDER_MAP[toFolder];
   const destDir = rest.includes("/") ? `${destRoot}/${rest.split("/").slice(0, -1).join("/")}` : destRoot;
   const filename = rest.split("/").pop() || "";
   let toRel = `${destDir}/${filename}`;
@@ -247,6 +250,19 @@ export function movePost(hexoRoot: string, relPath: string, toFolder: PostFolder
   if (hasAsset) {
     movePath(fromAsset, toAsset);
   }
+  return { path: toRel };
+}
+
+export function importMarkdownToDrafts(hexoRoot: string, filename: string, content: string): { path: string } {
+  const destDir = FOLDER_MAP.drafts;
+  const name = sanitizePostFilename(filename);
+  mkdirSync(join(resolve(hexoRoot), destDir), { recursive: true });
+  let toRel = `${destDir}/${name}`;
+  if (existsSync(resolveRel(hexoRoot, toRel))) {
+    toRel = uniqueRelInDir(hexoRoot, destDir, name);
+  }
+  const toAbs = resolveRel(hexoRoot, toRel);
+  writeFileSync(toAbs, content, "utf8");
   return { path: toRel };
 }
 

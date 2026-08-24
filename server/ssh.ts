@@ -4,7 +4,14 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { dirname as posixDirname, join as posixJoin } from "node:path/posix";
 import matter from "gray-matter";
 import { loadConfig } from "./config";
-import { hexoDate, resolveRel, sanitizePostFilename, slugifyTitle } from "./posts";
+import {
+  hexoDate,
+  importMarkdownToDrafts,
+  movePost,
+  resolveRel,
+  sanitizePostFilename,
+  slugifyTitle,
+} from "./posts";
 import { applyPostTemplate, resolveTemplateBody } from "./templates";
 import type { PostSummary, SshLogKind, SyncResult } from "./types";
 import { emitLog, setActivityLog } from "./activity-log";
@@ -705,6 +712,43 @@ export async function sshDeleteRemotePost(relPath: string): Promise<void> {
       await remoteRemove(sftp, remoteJoin(rel.replace(/\.md$/i, "")));
       remoteListCache.delete(rel);
       emit("sys", `已从服务器删除 ${rel}`);
+    }),
+  );
+}
+
+export async function sshUnpublishToLocalDraft(relPath: string): Promise<{ path: string }> {
+  const fromRel = assertRemotePost(relPath);
+  const hexoRoot = loadConfig().hexoRoot;
+  if (!hexoRoot.trim()) {
+    throw new Error("未设置本地 Hexo 根目录，无法移到草稿");
+  }
+  return withBusy(`正在将远程文章移到本地草稿 ${fromRel} …`, () =>
+    withSftp(true, async (sftp) => {
+      let toRel: string;
+      if (existsSync(resolveRel(hexoRoot, fromRel))) {
+        toRel = movePost(hexoRoot, fromRel, "drafts").path;
+      } else {
+        const abs = remoteJoin(fromRel);
+        if (!(await remoteExists(sftp, abs))) {
+          throw new Error("远程文章不存在");
+        }
+        const content = (await readRemoteBuffer(sftp, abs)).toString("utf8").replace(/^\uFEFF/, "");
+        toRel = importMarkdownToDrafts(hexoRoot, fromRel.split("/").pop() || "draft.md", content).path;
+        const fromAssetRel = fromRel.replace(/\.md$/i, "");
+        const toAssetRel = toRel.replace(/\.md$/i, "");
+        const files: string[] = [];
+        await walkRemote(sftp, remoteJoin(fromAssetRel), fromAssetRel, files);
+        for (const file of files) {
+          const suffix = file.slice(fromAssetRel.length);
+          const localAbs = resolve(hexoRoot, ...`${toAssetRel}${suffix}`.split("/"));
+          await downloadFile(sftp, remoteJoin(file), localAbs);
+        }
+      }
+      await remoteRemove(sftp, remoteJoin(fromRel));
+      await remoteRemove(sftp, remoteJoin(fromRel.replace(/\.md$/i, "")));
+      remoteListCache.delete(fromRel);
+      emit("sys", `已移到本地草稿 ${toRel}`);
+      return { path: toRel };
     }),
   );
 }

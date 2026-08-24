@@ -477,6 +477,69 @@ export default function App() {
     ],
   );
 
+  const unpublishPost = useCallback(
+    async (post: PostSummary) => {
+      if (post.folder !== "posts") {
+        notify("err", "只能把已发布文章移到草稿");
+        return;
+      }
+      const remote = post.origin === "remote";
+      if (
+        !window.confirm(
+          remote
+            ? `把远程「${post.title}」移到本地草稿，并从服务器已发布目录删除？`
+            : `把「${post.title}」从已发布移到 source/_drafts？`,
+        )
+      ) {
+        return;
+      }
+      try {
+        if (path === post.path && editingOrigin === post.origin && dirty) {
+          await api.savePost(post.path, content, post.origin);
+          setSaved(content);
+        }
+        const fromPath = post.path;
+        const result = await api.movePost(fromPath, "drafts", post.origin);
+        if (path === fromPath && editingOrigin === post.origin) {
+          setPath(result.path);
+          setEditingOrigin("local");
+        }
+        const filename = result.path.split("/").pop() || result.path;
+        await refreshPosts();
+        if (remote) {
+          await refreshRemotePosts();
+          notify("ok", `已移到本地草稿 / ${filename}`);
+          return;
+        }
+        if (settings?.autoUploadOnSave && settings.sshConfigured && ssh.connected) {
+          setLogOpen(true);
+          try {
+            await api.deletePost(fromPath, "remote");
+          } catch {
+            /* 服务器上可能没有这篇 */
+          }
+          notify("ok", `已移到草稿 / ${filename}`);
+        } else {
+          notify("ok", `已移到 source/_drafts / ${filename}`);
+        }
+      } catch (error) {
+        notify("err", error instanceof Error ? error.message : "移到草稿失败");
+      }
+    },
+    [
+      content,
+      dirty,
+      editingOrigin,
+      notify,
+      path,
+      refreshPosts,
+      refreshRemotePosts,
+      settings?.autoUploadOnSave,
+      settings?.sshConfigured,
+      ssh.connected,
+    ],
+  );
+
   const saveSettings = useCallback(
     async (patch: Partial<AppSettings>, nextTemplates: TemplateSet) => {
       setSavingSettings(true);
@@ -657,6 +720,22 @@ export default function App() {
             origin: "local",
           });
         }
+        if (action === "unpublish") {
+          const rel = path?.replace(/\\/g, "/") || "";
+          if (!path || !rel.startsWith("source/_posts/")) {
+            notify("err", "请先打开一篇已发布文章");
+            return;
+          }
+          void unpublishPost({
+            path,
+            name: path.split("/").pop() || path,
+            folder: "posts",
+            title: parseTitle(content) || path.split("/").pop() || "文章",
+            date: "",
+            mtime: 0,
+            origin: editingOrigin,
+          });
+        }
         if (action === "settings") setSettingsOpen(true);
         if (action === "export-config") void exportSettings();
         if (action === "import-config") void importSettings();
@@ -695,7 +774,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [content, editingOrigin, exportSettings, importSettings, notify, openRename, path, publishDraft, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline]);
+  }, [content, editingOrigin, exportSettings, importSettings, notify, openRename, path, publishDraft, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline, unpublishPost]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -813,6 +892,7 @@ export default function App() {
           onOpen={(p) => void openPost(p)}
           onRename={(p) => openRename(p.path, p.name, p.origin)}
           onPublish={(p) => void publishDraft(p)}
+          onUnpublish={(p) => void unpublishPost(p)}
           onDelete={(p) => void deletePost(p)}
           onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
           onOpenSettings={() => setSettingsOpen(true)}

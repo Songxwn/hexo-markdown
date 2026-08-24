@@ -98,6 +98,7 @@ export type MenuAction =
   | "save"
   | "rename"
   | "publish"
+  | "unpublish"
   | "settings"
   | "export-config"
   | "import-config"

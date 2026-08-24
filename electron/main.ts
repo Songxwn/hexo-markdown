@@ -266,6 +266,7 @@ function createMenu(): void {
         { label: "保存", accelerator: "CmdOrCtrl+S", click: () => sendMenu("save") },
         { label: "重命名文件…", click: () => sendMenu("rename") },
         { label: "发布草稿", click: () => sendMenu("publish") },
+        { label: "移到草稿", click: () => sendMenu("unpublish") },
         { type: "separator" },
         { label: "导出配置…", click: () => sendMenu("export-config") },
         { label: "导入配置…", click: () => sendMenu("import-config") },
