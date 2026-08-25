@@ -11,7 +11,7 @@ import type {
   TemplateSet,
   UploadResult,
 } from "./types";
-import { imageFileName } from "./markdown";
+import { imageUploadName, sniffImageType } from "./image-type";
 
 function desktop() {
   if (!window.hexo) {
@@ -92,9 +92,11 @@ export const api = {
 
   async uploadImage(file: File, postPath: string | null, origin: PostOrigin = "local"): Promise<UploadResult> {
     const data = await file.arrayBuffer();
+    const sniffed = sniffImageType(new Uint8Array(data));
+    const type = sniffed?.mime || file.type || "image/png";
     return desktop().uploadImage({
-      name: imageFileName(file),
-      type: file.type,
+      name: imageUploadName(file, type),
+      type,
       data,
       postPath,
       origin,

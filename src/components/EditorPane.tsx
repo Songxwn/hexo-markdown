@@ -83,22 +83,46 @@ function canTakeEditorFocus(): boolean {
   return true;
 }
 
-function collectImages(list: FileList | DataTransferItemList | null): File[] {
-  if (!list) return [];
-  const files: File[] = [];
-  if (list instanceof FileList) {
-    for (const file of Array.from(list)) {
-      if (file.type.startsWith("image/")) files.push(file);
-    }
-    return files;
+function isImageFile(file: File): boolean {
+  if (file.type.startsWith("image/")) return true;
+  return /\.(gif|png|jpe?g|webp|svg|bmp|avif)$/i.test(file.name);
+}
+
+function preferOriginalImages(files: File[]): File[] {
+  const seen = new Set<string>();
+  const unique: File[] = [];
+  for (const file of files) {
+    const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(file);
   }
-  for (const item of Array.from(list)) {
-    if (item.kind === "file" && item.type.startsWith("image/")) {
-      const file = item.getAsFile();
-      if (file) files.push(file);
-    }
+  const native = unique.filter(
+    (file) =>
+      /gif|webp|avif/i.test(file.type) || /\.(gif|webp|avif)$/i.test(file.name),
+  );
+  if (!native.length) return unique;
+  return unique.filter((file) => {
+    const clipboardPng =
+      file.type === "image/png" && (!file.name || /^image\.png$/i.test(file.name));
+    return !clipboardPng;
+  });
+}
+
+function collectImages(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const named = Array.from(data.files || []).filter(isImageFile);
+  const fromFiles = named.filter((file) => file.name && !/^image\.(png|jpe?g)$/i.test(file.name));
+  if (fromFiles.length) return preferOriginalImages(fromFiles);
+
+  const fromItems: File[] = [];
+  for (const item of Array.from(data.items || [])) {
+    if (item.kind !== "file") continue;
+    if (item.type && !item.type.startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (file && isImageFile(file)) fromItems.push(file);
   }
-  return files;
+  return preferOriginalImages(fromItems.length ? fromItems : named);
 }
 
 export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
@@ -196,7 +220,7 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
 
     const pasteHandler = EditorView.domEventHandlers({
       paste(event) {
-        const files = collectImages(event.clipboardData?.items || null);
+        const files = collectImages(event.clipboardData);
         if (!files.length) return false;
         event.preventDefault();
         const view = viewRef.current;
@@ -204,7 +228,7 @@ export const EditorPane = forwardRef<EditorHandle, Props>(function EditorPane(
         return true;
       },
       drop(event, view) {
-        const files = collectImages(event.dataTransfer?.files || null);
+        const files = collectImages(event.dataTransfer);
         if (!files.length) return false;
         event.preventDefault();
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });

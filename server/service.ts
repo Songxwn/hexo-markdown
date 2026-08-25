@@ -30,7 +30,7 @@ import { listTemplates, saveTemplates } from "./templates";
 import { isLlmConfigured } from "./llm";
 import { normalizeTheme } from "./theme";
 import { normalizeFontFamily, normalizeFontSize } from "./typography";
-import type { AppConfig, PostFolder, PostOrigin, TemplateSet } from "./types";
+import { applyImageType } from "./image-type";
 
 const IMAGE_TYPES = new Set([
   "image/png",
@@ -250,10 +250,11 @@ export function remoteMediaBytes(rel: string) {
 }
 
 export async function uploadImage(
-  file: UploadInput,
+  input: UploadInput,
   postPath: string | null,
   origin?: PostOrigin | null,
 ) {
+  const file = applyImageType(input);
   const ext = extname(file.originalname).toLowerCase();
   if (!IMAGE_TYPES.has(file.mimetype) && !IMAGE_EXTS.includes(ext)) {
     throw new Error("仅支持图片文件");

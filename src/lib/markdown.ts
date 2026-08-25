@@ -397,10 +397,4 @@ export function slugifyFilename(title: string): string {
   return `${(slug.slice(0, 80) || "untitled")}.md`;
 }
 
-export function imageFileName(file: File): string {
-  if (file.name && file.name !== "image.png") return file.name;
-  const ext = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
-  const t = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `paste-${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}.${ext}`;
-}
+export { imageUploadName as imageFileName } from "./image-type";
