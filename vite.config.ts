@@ -43,6 +43,18 @@ function preloadCjs(): Plugin {
 
 export default defineConfig({
   base: "./",
+  build: {
+    sourcemap: false,
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/mermaid")) return "mermaid";
+          if (id.includes("node_modules/highlight.js")) return "highlight";
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     preloadCjs(),
@@ -53,11 +65,12 @@ export default defineConfig({
           build: {
             rollupOptions: {
               external: ["ssh2", /\.node$/],
-              output: {
-                format: "es",
-                entryFileNames: "[name].js",
-                chunkFileNames: "[name].js",
-              },
+            output: {
+              format: "es",
+              entryFileNames: "[name].js",
+              chunkFileNames: "[name].js",
+              inlineDynamicImports: false,
+            },
             },
           },
         },

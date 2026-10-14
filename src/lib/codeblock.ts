@@ -1,4 +1,13 @@
-import hljs from "highlight.js";
+import hljs from "highlight.js/lib/common";
+import dockerfile from "highlight.js/lib/languages/dockerfile";
+import dos from "highlight.js/lib/languages/dos";
+import nginx from "highlight.js/lib/languages/nginx";
+import powershell from "highlight.js/lib/languages/powershell";
+
+hljs.registerLanguage("dockerfile", dockerfile);
+hljs.registerLanguage("dos", dos);
+hljs.registerLanguage("nginx", nginx);
+hljs.registerLanguage("powershell", powershell);
 
 export function isMermaidLang(lang: string | undefined | null): boolean {
   const name = (lang || "").trim().toLowerCase();

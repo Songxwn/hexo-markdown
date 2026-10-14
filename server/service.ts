@@ -12,7 +12,6 @@ import {
   validateHexoRoot,
   writePost,
 } from "./posts";
-import { uploadToR2 } from "./r2";
 import {
   isSshConfigured,
   sshCreateRemotePost,
@@ -264,6 +263,7 @@ export async function uploadImage(
   }
   const cfg = loadConfig();
   if (isR2Configured(cfg)) {
+    const { uploadToR2 } = await import("./r2");
     const result = await uploadToR2(cfg, file);
     return { ...result, storage: "r2" as const };
   }
