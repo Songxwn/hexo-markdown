@@ -64,12 +64,12 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ["ssh2", /\.node$/],
+              external: ["ssh2", "@aws-sdk/client-s3", /\.node$/],
             output: {
               format: "es",
               entryFileNames: "[name].js",
               chunkFileNames: "[name].js",
-              inlineDynamicImports: false,
+              inlineDynamicImports: true,
             },
             },
           },
