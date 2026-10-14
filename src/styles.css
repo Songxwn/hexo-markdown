@@ -415,11 +415,36 @@ body.platform-linux .titlebar {
 
 .sidebar-search input {
   flex: 1;
+  min-width: 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
   font-size: calc(13px * var(--font-scale));
+}
+
+.sidebar-refresh {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -2px -4px -2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sidebar-refresh:hover:not(:disabled) {
+  background: var(--hover-muted);
+  color: var(--text);
+}
+
+.sidebar-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .sidebar-tabs {

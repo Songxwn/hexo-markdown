@@ -1,4 +1,4 @@
-import { Cloud, FileText, Pencil, Plug, Search, Send, Trash2, Undo2 } from "lucide-react";
+import { Cloud, FileText, Pencil, Plug, RefreshCw, Search, Send, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PostOrigin, PostSummary, SshStatus } from "../lib/types";
@@ -24,6 +24,7 @@ type Props = {
   onUnpublish: (post: PostSummary) => void;
   onDelete: (post: PostSummary) => void;
   onConnect: () => void;
+  onRefreshRemote: () => void;
   onOpenSettings: () => void;
   onResizeStart: (e: React.MouseEvent) => void;
 };
@@ -57,6 +58,7 @@ export function Sidebar({
   onUnpublish,
   onDelete,
   onConnect,
+  onRefreshRemote,
   onOpenSettings,
   onResizeStart,
 }: Props) {
@@ -112,6 +114,17 @@ export function Sidebar({
           onChange={(e) => setQuery(e.target.value)}
           placeholder={tab === "posts" ? "搜索远程文章" : "搜索文章"}
         />
+        {tab === "posts" ? (
+          <button
+            type="button"
+            className="sidebar-refresh"
+            title="刷新远程文章"
+            disabled={!ssh.connected || ssh.busy || loadingRemote}
+            onClick={onRefreshRemote}
+          >
+            <RefreshCw size={14} className={loadingRemote ? "spin" : ""} />
+          </button>
+        ) : null}
       </div>
       <div className="sidebar-tabs">
         <button className={tab === "all" ? "on" : ""} onClick={() => onTabChange("all")}>

@@ -224,6 +224,31 @@ export default function App() {
     }
   }, [notify, ssh.connected]);
 
+  const reloadRemote = useCallback(async () => {
+    if (!ssh.connected) {
+      notify("err", "请先连接 SSH，才能刷新远程文章");
+      return;
+    }
+    await refreshRemotePosts();
+    if (!path || editingOrigin !== "remote") {
+      notify("ok", "已刷新远程文章列表");
+      return;
+    }
+    if (dirty && !window.confirm("当前远程文章未保存，刷新会丢掉未保存的修改。继续？")) {
+      notify("ok", "已刷新远程文章列表");
+      return;
+    }
+    try {
+      const file = await api.readPost(path, "remote");
+      setPath(file.path);
+      setContent(file.content);
+      setSaved(file.content);
+      notify("ok", "已刷新远程文章");
+    } catch (error) {
+      notify("err", error instanceof Error ? error.message : "无法重新读取远程文章");
+    }
+  }, [dirty, editingOrigin, notify, path, refreshRemotePosts, ssh.connected]);
+
   const boot = useCallback(async () => {
     try {
       const [next, info, tpl] = await Promise.all([
@@ -754,6 +779,7 @@ export default function App() {
         if (action === "ssh-connect") void runRemote("已连接 SSH", () => api.sshConnect());
         if (action === "ssh-disconnect") void runRemote("已断开 SSH", () => api.sshDisconnect());
         if (action === "ssh-pull") void runRemote("拉取完成", () => api.sshPull());
+        if (action === "ssh-refresh") void reloadRemote();
         if (action === "ssh-push-current") {
           if (!path) {
             notify("err", "请先打开一篇文章");
@@ -783,7 +809,7 @@ export default function App() {
     } catch {
       return undefined;
     }
-  }, [content, editingOrigin, exportSettings, importSettings, notify, openRename, path, publishDraft, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline, unpublishPost]);
+  }, [content, editingOrigin, exportSettings, importSettings, notify, openRename, path, publishDraft, reloadRemote, runRemote, savePost, sidebarTab, ssh.connected, toggleLlm, toggleOutline, unpublishPost]);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -904,6 +930,7 @@ export default function App() {
           onUnpublish={(p) => void unpublishPost(p)}
           onDelete={(p) => void deletePost(p)}
           onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
+          onRefreshRemote={() => void reloadRemote()}
           onOpenSettings={() => setSettingsOpen(true)}
           onResizeStart={startSidebarResize}
         />
@@ -970,6 +997,8 @@ export default function App() {
             onConnect={() => void runRemote("已连接 SSH", () => api.sshConnect())}
             onDisconnect={() => void runRemote("已断开 SSH", () => api.sshDisconnect())}
             onPull={() => void runRemote("拉取完成", () => api.sshPull())}
+            onRefresh={() => void reloadRemote()}
+            refreshing={loadingRemote}
             onPushCurrent={() => {
               if (!path) {
                 notify("err", "请先打开一篇文章");

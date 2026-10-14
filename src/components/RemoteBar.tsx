@@ -1,4 +1,4 @@
-import { CloudUpload, Download, Plug, PlugZap, Rocket, ScrollText, Upload } from "lucide-react";
+import { CloudUpload, Download, Plug, PlugZap, RefreshCw, Rocket, ScrollText, Upload } from "lucide-react";
 import type { Ref } from "react";
 import type { SshStatus } from "../lib/types";
 
@@ -13,6 +13,8 @@ type Props = {
   onConnect: () => void;
   onDisconnect: () => void;
   onPull: () => void;
+  onRefresh: () => void;
+  refreshing?: boolean;
   onPushCurrent: () => void;
   onPushAll: () => void;
   onGenerate: () => void;
@@ -30,6 +32,8 @@ export function RemoteBar({
   onConnect,
   onDisconnect,
   onPull,
+  onRefresh,
+  refreshing = false,
   onPushCurrent,
   onPushAll,
   onGenerate,
@@ -70,6 +74,9 @@ export function RemoteBar({
           <Plug size={14} />
         </button>
       )}
+      <button disabled={disabled || !ssh.connected} onClick={onRefresh} title="刷新远程文章列表">
+        <RefreshCw size={14} className={refreshing ? "spin" : ""} />
+      </button>
       <button disabled={disabled || !ssh.connected} onClick={onPull} title="从服务器拉取 Markdown">
         <Download size={14} />
       </button>

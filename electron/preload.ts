@@ -15,6 +15,7 @@ export type MenuAction =
   | "ssh-connect"
   | "ssh-disconnect"
   | "ssh-pull"
+  | "ssh-refresh"
   | "ssh-push-current"
   | "ssh-push-all"
   | "hexo-generate"

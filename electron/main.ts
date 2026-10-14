@@ -357,6 +357,7 @@ function createMenu(): void {
         { label: "连接 SSH", click: () => sendMenu("ssh-connect") },
         { label: "断开连接", click: () => sendMenu("ssh-disconnect") },
         { type: "separator" },
+        { label: "刷新远程文章", click: () => sendMenu("ssh-refresh") },
         { label: "从服务器拉取", click: () => sendMenu("ssh-pull") },
         { label: "推送当前文章", accelerator: "CmdOrCtrl+Shift+U", click: () => sendMenu("ssh-push-current") },
         { label: "推送全部文章", click: () => sendMenu("ssh-push-all") },
