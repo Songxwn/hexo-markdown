@@ -49,7 +49,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/mermaid")) return "mermaid";
           if (id.includes("node_modules/highlight.js")) return "highlight";
         },
       },

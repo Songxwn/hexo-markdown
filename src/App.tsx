@@ -270,6 +270,7 @@ export default function App() {
         try {
           const info = await api.sshConnect();
           setSsh(await api.sshStatus());
+          setSidebarTab("posts");
           notify("ok", `已连接 ${info.user}@${info.host}`);
         } catch (error) {
           try {

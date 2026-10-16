@@ -1,20 +1,12 @@
-type MermaidApi = typeof import("mermaid").default;
+import mermaid from "mermaid";
 
-let mermaidPromise: Promise<MermaidApi> | null = null;
 let themeKey = "";
-
-function loadMermaid(): Promise<MermaidApi> {
-  if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((mod) => mod.default);
-  }
-  return mermaidPromise;
-}
 
 function currentThemeKey(): string {
   return document.documentElement.dataset.theme === "paper" ? "paper" : "dark";
 }
 
-function ensureInit(mermaid: MermaidApi): void {
+function ensureInit(): void {
   const key = currentThemeKey();
   if (key === themeKey) return;
   themeKey = key;
@@ -49,9 +41,7 @@ let seq = 0;
 export async function renderMermaidBlocks(root: HTMLElement, cancelled?: () => boolean): Promise<void> {
   const blocks = [...root.querySelectorAll<HTMLElement>(".preview-mermaid")];
   if (!blocks.length) return;
-  const mermaid = await loadMermaid();
-  if (cancelled?.()) return;
-  ensureInit(mermaid);
+  ensureInit();
   for (const block of blocks) {
     if (cancelled?.()) return;
     const srcEl = block.querySelector(".mermaid-src");
